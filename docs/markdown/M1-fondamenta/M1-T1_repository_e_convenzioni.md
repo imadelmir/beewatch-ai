@@ -14,7 +14,7 @@ senza convenzioni condivise produce tre stili diversi e una cronologia illeggibi
 
 ### Repository
 
-Repository pubblico `AVENA50/beewatch-ai` su GitHub, con licenza MIT.
+Repository pubblico `imadelmir/beewatch-ai` su GitHub, con licenza MIT.
 
 ### Protezione del ramo principale
 
