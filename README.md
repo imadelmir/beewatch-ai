@@ -8,7 +8,7 @@ Registra apiari, alveari, ispezioni e raccolti. Stima la resa attesa con un
 modello di regressione. Riassume le note di campo con un assistente
 conversazionale che può girare interamente sul tuo computer.
 
-[![CI](https://github.com/AVENA50/beewatch-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/AVENA50/beewatch-ai/actions/workflows/ci.yml)
+[![CI](https://github.com/imadelmir/beewatch-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/imadelmir/beewatch-ai/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -72,7 +72,7 @@ conversazionale che può girare interamente sul tuo computer.
 ### Installazione
 
 ```bash
-git clone https://github.com/AVENA50/beewatch-ai.git
+git clone https://github.com/imadelmir/beewatch-ai.git
 cd beewatch-ai
 
 python -m venv .venv
