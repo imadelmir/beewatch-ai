@@ -22,6 +22,24 @@ conversazionale che può girare interamente sul tuo computer.
 
 ---
 
+## In breve
+
+> **Progetto in corso.** Fondamenta e livello dati sono chiusi; ETL, modello di
+> previsione e interfaccia Streamlit sono ancora da costruire. Quello che segue
+> descrive il progetto completo, e la tabella di marcia dice a che punto e.
+
+| | |
+|---|---|
+| **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
+| **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza |
+| **Risultato finora** | 2 milestone su 8 chiuse, 33 test automatici, CI verde |
+| **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
+| **Demo** | Non ancora: l'interfaccia e la milestone M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
+| **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
+| **Stato** | In corso, iniziato ad agosto 2026 — [roadmap](#stato-e-roadmap) · [backlog](../../issues) |
+
+---
+
 ## Indice
 
 - [Cosa fa](#cosa-fa)
