@@ -24,8 +24,10 @@ Gli errori di configurazione sono segnalati con `ConfigError`, che vive in
 
 from __future__ import annotations
 
+import codecs
+import io
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
@@ -38,6 +40,7 @@ RADICE = Path(__file__).resolve().parent.parent
 
 PROVIDER_AMMESSI = ("ollama", "openrouter")
 LIVELLI_LOG = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+MODELLO_PREDEFINITO = "models/produzione_v1.joblib"
 
 
 # --------------------------------------------------------------------------- #
@@ -47,10 +50,21 @@ LIVELLI_LOG = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 # subito: l'eccezione arriva alla fine, con il quadro completo.
 
 
-def _testo(nome: str, errori: list[str], predefinito: str | None = None) -> str:
-    valore = os.getenv(nome, "").strip()
-    if valore:
-        return valore
+def _testo(
+    nome: str, errori: list[str], predefinito: str | None = None, *, segreto: bool = False
+) -> str:
+    """Valore di una variabile di testo.
+
+    Di norma gli spazi attorno vengono tolti: uno spazio finale copiato per
+    sbaglio non deve diventare parte del nome host. Con `segreto=True` (password,
+    chiavi API) il valore invece NON si modifica: gli spazi possono farne parte.
+    Gli spazi «di sintassi» li gestisce già il parser di `.env` (senza
+    virgolette: tolti; fra virgolette: conservati). Un valore vuoto o fatto di
+    soli spazi vale sempre come non impostato.
+    """
+    valore = os.getenv(nome, "")
+    if valore.strip():
+        return valore if segreto else valore.strip()
     if predefinito is not None:
         return predefinito
     errori.append(f"{nome} è obbligatoria e non è impostata")
@@ -72,6 +86,29 @@ def _intero(nome: str, errori: list[str], predefinito: int, minimo: int, massimo
     return valore
 
 
+def forma_canonica(grezzo: str, ammessi: tuple[str, ...]) -> str | None:
+    """La forma canonica di `grezzo` fra gli `ammessi`, o None se non c'è.
+
+    Ignora maiuscole, minuscole e spazi attorno al valore. È usata anche da
+    `logging_config`, così `LOG_LEVEL` e `configura(livello=...)` si comportano
+    allo stesso modo.
+    """
+    canoniche = {a.casefold(): a for a in ammessi}
+    return canoniche.get(grezzo.strip().casefold())
+
+
+def _percorso(nome: str, predefinito: str) -> Path:
+    """Percorso da variabile d'ambiente, normalizzato e senza toccare il disco.
+
+    Assente, vuota o fatta di soli spazi: vale il predefinito. Un percorso
+    relativo parte dalla radice del progetto; uno assoluto resta com'è. Gli
+    eventuali `..` vengono risolti per via lessicale (niente accesso al
+    filesystem, niente seguire i link simbolici).
+    """
+    valore = os.getenv(nome, "").strip() or predefinito
+    return Path(os.path.normpath(RADICE / valore))
+
+
 def _scelta(nome: str, errori: list[str], ammessi: tuple[str, ...], predefinito: str) -> str:
     """Valore fra quelli ammessi, ignorando maiuscole e minuscole.
 
@@ -79,8 +116,7 @@ def _scelta(nome: str, errori: list[str], ammessi: tuple[str, ...], predefinito:
     `INFO`, che è la forma che il modulo logging si aspetta.
     """
     grezzo = os.getenv(nome, "").strip() or predefinito
-    canoniche = {a.casefold(): a for a in ammessi}
-    valore = canoniche.get(grezzo.casefold())
+    valore = forma_canonica(grezzo, ammessi)
     if valore is None:
         errori.append(f"{nome} deve essere uno fra {', '.join(ammessi)}, trovato «{grezzo}»")
         return predefinito
@@ -97,13 +133,18 @@ def _scelta(nome: str, errori: list[str], ammessi: tuple[str, ...], predefinito:
 
 @dataclass(frozen=True)
 class ConfigDatabase:
-    """Credenziali e coordinate del database MySQL."""
+    """Credenziali e coordinate del database MySQL.
+
+    I campi segreti hanno `repr=False`: così `repr()`, `str()` e i messaggi dei
+    test non li mostrano. Ogni nuovo segreto va dichiarato allo stesso modo
+    (un test controlla che nessun campo «sensibile» sia rimasto visibile).
+    """
 
     host: str
     porta: int
     nome: str
     utente: str
-    password: str
+    password: str = field(repr=False)
 
     def descrizione(self) -> str:
         """Stringa sicura da mostrare nei log: la password non compare mai."""
@@ -116,7 +157,7 @@ class ConfigLLM:
 
     provider: str
     modello: str
-    api_key: str | None
+    api_key: str | None = field(repr=False)
     timeout: int
 
     @property
@@ -156,6 +197,45 @@ class Config:
 # --------------------------------------------------------------------------- #
 
 
+def _leggi_env(env: Path) -> None:
+    """Carica `.env` nell'ambiente. Un file assente non è un errore.
+
+    Il file si legge come byte e si decodifica qui, non in `load_dotenv`, per
+    due motivi. Il BOM UTF-8 (che Blocco note di Windows aggiunge) va tolto,
+    altrimenti la prima chiave diventa «\\ufeffDB_NAME» e viene ignorata senza
+    avvisare. L'UTF-16 va riconosciuto e rifiutato con un messaggio chiaro,
+    invece di un `UnicodeDecodeError`. I messaggi non citano mai il contenuto
+    del file: potrebbe contenere password.
+    """
+    try:
+        grezzo = env.read_bytes()
+    except FileNotFoundError:
+        return  # normale in Docker e in CI: le variabili arrivano dall'ambiente
+    except OSError as errore:
+        raise ConfigError(
+            f"Impossibile leggere il file di configurazione {env}: "
+            f"{errore.strerror or type(errore).__name__}."
+        ) from None
+
+    # Un file UTF-16/32 ha il BOM oppure è pieno di byte NUL: UTF-8 valido non
+    # ne contiene. Il suggerimento è lo stesso in entrambi i casi.
+    if grezzo.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)) or b"\x00" in grezzo:
+        raise ConfigError(
+            f"Il file {env} è salvato in UTF-16 (o in un'altra codifica non supportata). "
+            f"Salvalo di nuovo come UTF-8."
+        )
+    try:
+        testo = grezzo.decode("utf-8-sig")  # toglie il BOM se c'è
+    except UnicodeDecodeError:
+        raise ConfigError(
+            f"Il file {env} non è UTF-8 valido. Salvalo di nuovo come UTF-8."
+        ) from None
+
+    # override=False: le variabili già presenti nell'ambiente (Docker, CI)
+    # hanno la precedenza sul file .env di sviluppo.
+    load_dotenv(stream=io.StringIO(testo), override=False)
+
+
 def carica(percorso_env: Path | None = None) -> Config:
     """Legge `.env`, valida tutto e restituisce la configurazione.
 
@@ -164,9 +244,7 @@ def carica(percorso_env: Path | None = None) -> Config:
     file diverso da quello di progetto.
     """
     env = percorso_env or (RADICE / ".env")
-    # override=False: le variabili già presenti nell'ambiente (Docker, CI)
-    # hanno la precedenza sul file .env di sviluppo.
-    load_dotenv(env, override=False)
+    _leggi_env(env)
 
     errori: list[str] = []
 
@@ -175,11 +253,11 @@ def carica(percorso_env: Path | None = None) -> Config:
         porta=_intero("DB_PORT", errori, 3306, 1, 65535),
         nome=_testo("DB_NAME", errori),
         utente=_testo("DB_USER", errori),
-        password=_testo("DB_PASSWORD", errori),
+        password=_testo("DB_PASSWORD", errori, segreto=True),
     )
 
     provider = _scelta("LLM_PROVIDER", errori, PROVIDER_AMMESSI, "ollama")
-    api_key = os.getenv("LLM_API_KEY", "").strip() or None
+    api_key = _testo("LLM_API_KEY", errori, "", segreto=True) or None
     # Ollama gira in locale e non richiede chiave. OpenRouter sì: senza,
     # l'assistente fallirebbe alla prima richiesta invece che all'avvio.
     if provider == "openrouter" and not api_key:
@@ -192,7 +270,7 @@ def carica(percorso_env: Path | None = None) -> Config:
         timeout=_intero("LLM_TIMEOUT", errori, 60, 5, 600),
     )
 
-    percorso_modello = RADICE / os.getenv("MODEL_PATH", "models/produzione_v1.joblib").strip()
+    percorso_modello = _percorso("MODEL_PATH", MODELLO_PREDEFINITO)
     livello_log = _scelta("LOG_LEVEL", errori, LIVELLI_LOG, "INFO")
 
     if errori:

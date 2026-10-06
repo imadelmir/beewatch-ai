@@ -34,9 +34,10 @@ class BeeWatchError(Exception):
 class ConfigError(BeeWatchError):
     """Configurazione assente, incompleta o con valori non validi.
 
-    Sollevata all'avvio da `beewatch.config.carica()`. È l'unico errore che
-    l'applicazione non può gestire in alcun modo: se la configurazione non è
-    valida, non c'è niente da avviare.
+    Sollevata all'avvio da `beewatch.config.carica()` e da
+    `beewatch.logging_config.configura()` (livello di log non valido, file di
+    log inutilizzabile). È l'unico errore che l'applicazione non può gestire in
+    alcun modo: se la configurazione non è valida, non c'è niente da avviare.
     """
 
 
