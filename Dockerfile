@@ -2,9 +2,9 @@
 # BeeWatch AI - immagine dell'applicazione
 # =========================================================================== #
 #
-#   docker compose --profile app build      costruisce
-#   docker compose --profile app up -d      avvia app + database
-#   docker compose up -d                    solo il database (sviluppo normale)
+#   docker compose build                    costruisce
+#   docker compose up --build               avvia app + database
+#   docker compose up -d mysql              solo il database (sviluppo normale)
 #
 # Durante lo sviluppo conviene far girare Streamlit sul computer e tenere nel
 # contenitore solo MySQL: si ricarica a ogni salvataggio. Questa immagine serve
@@ -61,10 +61,15 @@ USER beewatch
 
 EXPOSE 8501
 
-# Streamlit espone un endpoint di stato apposta per questo. Senza healthcheck,
-# il contenitore risulta "avviato" anche se l'applicazione e' morta.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"
+# "Sano" non vuol dire solo "Streamlit risponde": un'app che non vede il database
+# non serve a nessuno. `beewatch.healthcheck` controlla, in ordine, che la
+# configurazione sia valida, che Streamlit risponda (/_stcore/health) e che MySQL
+# accetti le credenziali dell'app. Esce con 1 e una riga di motivo se qualcosa non va
+# (la vedi in `docker inspect`), e non scrive nulla ne' stampa credenziali.
+#
+# --timeout sta sopra la somma dei due controlli di rete (3 secondi ciascuno).
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD ["python", "-m", "beewatch.healthcheck"]
 
 # --server.address=0.0.0.0 e' obbligatorio: per impostazione predefinita
 # Streamlit ascolta solo su localhost, che dentro un contenitore significa

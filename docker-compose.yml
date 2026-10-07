@@ -1,40 +1,81 @@
 # =========================================================================== #
-# BeeWatch AI - servizi di sviluppo
+# BeeWatch AI - ambiente completo: database + applicazione
 # =========================================================================== #
 #
-#   docker compose up -d          avvia MySQL in secondo piano
-#   docker compose logs -f mysql  guarda cosa sta facendo
-#   docker compose down           ferma tutto, i dati restano
-#   docker compose down -v        ferma tutto e CANCELLA i dati
+#   docker compose up                avvia tutto; l'app e' su http://localhost:8501
+#   docker compose up --build        idem, ricostruendo prima l'immagine dell'app
+#   docker compose up -d mysql       solo il database (sviluppo: Streamlit sul computer)
+#   docker compose logs -f mysql     guarda cosa sta facendo (o `app`)
+#   docker compose down              ferma tutto, i dati restano
+#   docker compose down -v           ferma tutto e CANCELLA i dati
+#
+# `docker compose up` avvia l'ambiente completo perche' e' quello che la consegna
+# richiede (M7-T2, M8-T7: "git clone pulito e docker compose up fanno partire l'app").
+# Durante lo sviluppo Streamlit si fa girare sul computer, dove si ricarica a ogni
+# salvataggio: lo si ottiene chiedendo solo il database, `docker compose up -d mysql`.
+#
+# L'immagine dell'app si costruisce da sola la prima volta (se non esiste), poi
+# `docker compose up` la riusa. Dopo aver cambiato il codice Python, il Dockerfile o le
+# dipendenze serve `docker compose up --build`: senza, parte l'immagine vecchia. Vale
+# anche per un'immagine `beewatch-ai:dev` costruita con una versione precedente di
+# questo file: la prima volta, `--build`.
 #
 # Al primo avvio - cioe' quando il volume e' vuoto - MySQL esegue da solo tutti
 # gli .sql che trova in /docker-entrypoint-initdb.d, in ordine alfabetico:
-# prima `schema.sql`, poi `seed.sql`. Non serve nessun comando manuale.
+# `privilegi.sql` (toglie all'utente applicativo tutto tranne SELECT, INSERT,
+# UPDATE, DELETE), poi `schema.sql`, poi `seed.sql`. Non serve nessun comando manuale.
 #
 # Quegli script NON vengono rieseguiti agli avvii successivi. Per ripartire da
 # un database pulito:
 #
 #   docker compose down -v && docker compose up -d
 #
-# Le credenziali arrivano da `.env`, lo stesso file che legge l'applicazione:
-# una sola fonte di verita' (M1-T3).
+# Se uno script di inizializzazione da' errore, `docker compose up` fallisce e il
+# contenitore `mysql` resta fermo (vedi `restart` qui sotto): leggi
+# `docker compose logs mysql`, correggi lo script e riparti con `down -v`. Il volume
+# resta a meta' e MySQL non rifarebbe l'inizializzazione.
+#
+# Le credenziali arrivano da `.env`, lo stesso file che legge l'applicazione
+# quando gira sul computer: una sola fonte di verita' (M1-T3). Compose lo legge da
+# solo per le variabili `${...}` qui sotto.
+#
+# Le due porte di MySQL, da non confondere:
+#
+#   DB_PORT (in .env)   la porta sul COMPUTER, pubblicata su 127.0.0.1. Serve a chi sta
+#                       fuori da Docker: Streamlit sul computer, un client SQL. Si cambia
+#                       se la 3306 e' occupata, e non cambia nient'altro.
+#   3306                la porta di MySQL DENTRO la rete di Docker. E' fissa. L'app nel
+#                       contenitore raggiunge sempre `mysql:3306`, qualunque sia DB_PORT.
 
 services:
   mysql:
     image: mysql:8.4
     container_name: beewatch-mysql
-    restart: unless-stopped
+
+    # Niente riavvio automatico, ed e' una scelta: se uno script di inizializzazione da'
+    # errore, MySQL esce. Con `unless-stopped` Docker lo rialzerebbe subito su un volume
+    # rimasto a meta': al secondo avvio MySQL salta l'inizializzazione, parte senza
+    # schema e `docker compose up --wait` risulterebbe riuscito. Cosi' invece l'errore
+    # emerge subito. Dopo un riavvio del computer il database si riaccende con
+    # `docker compose up`.
+    restart: "no"
 
     environment:
-      # Serve solo al contenitore per creare il database e l'utente.
-      # L'applicazione non usa mai l'utente root.
+      # Serve solo a questo contenitore, per creare database e utente. L'applicazione
+      # non la riceve e non usa mai l'utente root.
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?serve DB_ROOT_PASSWORD in .env}
+      # Root puo' collegarsi solo dall'interno di questo contenitore (`docker compose
+      # exec mysql mysql -uroot -p`). Senza, l'immagine crea anche `root@%`, un root
+      # raggiungibile da qualunque altro contenitore della rete.
+      MYSQL_ROOT_HOST: localhost
       MYSQL_DATABASE: ${DB_NAME:?serve DB_NAME in .env}
+      # L'immagine da' a questo utente tutti i privilegi sul database: poi
+      # `sql/privilegi.sql` ne lascia solo quattro.
       MYSQL_USER: ${DB_USER:?serve DB_USER in .env}
       MYSQL_PASSWORD: ${DB_PASSWORD:?serve DB_PASSWORD in .env}
       TZ: Europe/Rome
 
-    # La porta interna resta 3306; quella esposta arriva da .env, cosi' chi ha
+    # La porta interna resta 3306; quella sul computer arriva da .env, cosi' chi ha
     # gia' un MySQL sulla 3306 puo' cambiarla senza toccare questo file.
     #
     # `127.0.0.1:` davanti non e' un dettaglio: senza, Docker pubblica la porta
@@ -52,11 +93,21 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
 
-    # Serve a `docker compose up --wait` e a chi in futuro dipendera' da questo
-    # servizio: senza, il contenitore risulta avviato prima che MySQL accetti
-    # connessioni, e il primo tentativo fallisce.
+    # Serve a `docker compose up --wait` e all'app, che parte solo quando questo
+    # servizio e' sano. "Sano" vuol dire: il server vero e' in ascolto (durante
+    # l'inizializzazione del volume MySQL parte soltanto su un socket interno, e la
+    # connessione TCP fallisce), l'utente dell'app riesce ad entrare e il database ha
+    # almeno una tabella. L'ultima condizione impedisce di dichiarare pronto un
+    # database a cui l'inizializzazione non ha creato lo schema, anche se qualcosa
+    # (un riavvio, un volume rimasto a meta') ha saltato l'errore. La password passa da
+    # MYSQL_PWD, non dalla riga di comando.
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$$MYSQL_PASSWORD" mysql -h 127.0.0.1 -u "$$MYSQL_USER" --connect-timeout=3 -N -B
+          -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$$MYSQL_DATABASE'"
+          2>/dev/null | grep -qvx 0
       interval: 10s
       timeout: 5s
       retries: 10
@@ -65,13 +116,6 @@ services:
   # --------------------------------------------------------------------------- #
   # L'applicazione Streamlit
   # --------------------------------------------------------------------------- #
-  # Non parte con `docker compose up -d`: e' dietro il profilo `app`. Durante lo
-  # sviluppo Streamlit si fa girare sul computer, dove si ricarica a ogni
-  # salvataggio, e nel contenitore resta solo il database. Costruire l'immagine
-  # a ogni avvio sarebbe tempo perso.
-  #
-  #     docker compose --profile app up -d --build
-  #
   app:
     build:
       context: .
@@ -79,26 +123,38 @@ services:
     image: beewatch-ai:dev
     container_name: beewatch-app
     restart: unless-stopped
-    profiles: ["app"]
 
+    # Solo le variabili che l'applicazione legge, ognuna scritta qui: NON `env_file:
+    # .env`, che le girerebbe tutte, `DB_ROOT_PASSWORD` compresa. Se un domani
+    # `beewatch/config.py` legge una variabile in piu', va aggiunta a questo elenco.
     environment:
-      # Dentro la rete di Docker il database non e' su localhost: si raggiunge
-      # con il nome del servizio. E' l'unica variabile che va sovrascritta.
+      # Dentro la rete di Docker il database non e' su localhost e non e' sulla porta
+      # del computer: e' il servizio `mysql`, sulla 3306. Valori fissi, non da .env.
       DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:?serve DB_NAME in .env}
+      DB_USER: ${DB_USER:?serve DB_USER in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?serve DB_PASSWORD in .env}
+      # Vuote se mancano in .env: `config.py` le tratta come "non impostate" e usa i
+      # valori predefiniti.
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-}
+      MODEL_PATH: ${MODEL_PATH:-}
+      LOG_LEVEL: ${LOG_LEVEL:-}
       TZ: Europe/Rome
-
-    # Tutto il resto arriva dallo stesso .env che legge l'applicazione quando
-    # gira sul computer: una sola fonte di verita' (M1-T3).
-    env_file:
-      - .env
 
     ports:
       - "127.0.0.1:8501:8501"
 
+    # L'healthcheck e' quello del Dockerfile: configurazione valida + Streamlit che
+    # risponde + MySQL raggiungibile con le credenziali dell'app (`beewatch.healthcheck`).
+    # Un'app con il database spento o la password sbagliata risulta `unhealthy`.
+    #
     # `service_healthy` e non `service_started`: senza, l'applicazione partirebbe
-    # mentre MySQL sta ancora inizializzando i propri file, e il primo tentativo
-    # di connessione fallirebbe. E' il motivo per cui l'healthcheck del database
-    # esiste.
+    # mentre MySQL sta ancora inizializzando i propri file, e il primo controllo di
+    # salute fallirebbe. E' il motivo per cui l'healthcheck del database esiste.
     depends_on:
       mysql:
         condition: service_healthy
