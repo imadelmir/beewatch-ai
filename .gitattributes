@@ -1,0 +1,12 @@
+# Fine riga: nel repository e nel working tree sempre LF, su ogni sistema.
+# Git riconosce da solo i file di testo; `core.autocrlf` non conta piu'.
+* text=auto eol=lf
+
+# Gli script shell girano nei contenitori Linux: con CRLF non partono.
+*.sh text eol=lf
+
+# I notebook sono JSON: testo, anche se Git a volte li scambia per binari.
+*.ipynb text eol=lf
+
+# Binari: mai convertiti, mai confrontati riga per riga.
+*.png binary
