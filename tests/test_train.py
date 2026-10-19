@@ -36,6 +36,7 @@ from beewatch.ml.train import (
     metriche,
     migliore_baseline,
     previsioni_baseline,
+    soddisfa_criterio,
     valuta_baseline,
 )
 
@@ -169,6 +170,43 @@ def test_la_migliore_baseline_e_quella_con_il_mae_minore() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Criterio di accettazione (DA-05)
+# --------------------------------------------------------------------------- #
+
+# La persistenza sul pannello Q8 a piena precisione (vedi il test di integrazione).
+BASELINE_Q8 = {
+    MEDIA_STATO_TREND: Metriche(4.168074834401709, 5.43, 0.45),
+    PERSISTENZA: Metriche(4.063428333333333, 5.30, 0.47),
+}
+
+
+@pytest.mark.parametrize(
+    "mae,accettato",
+    [
+        (3.9, True),
+        (4.0634, True),  # si scrive 4,06 ed è sotto la persistenza
+        (4.063428333333333, False),  # uguale non basta: serve strettamente minore
+        (4.0640, False),  # si scrive 4,06 ma è sopra: l'arrotondamento non decide
+        (4.20, False),  # sotto la vecchia soglia di M2-T3 (4,25), non sotto la persistenza
+    ],
+)
+def test_il_criterio_da_05_e_battere_la_persistenza_senza_arrotondare(
+    mae: float, accettato: bool
+) -> None:
+    assert soddisfa_criterio(Metriche(mae, 5.0, 0.5), BASELINE_Q8) is accettato
+
+
+def test_il_criterio_e_la_persistenza_anche_se_unaltra_baseline_fosse_piu_forte() -> None:
+    baseline = {MEDIA_STATO_TREND: Metriche(3.0, 4.0, 0.6), PERSISTENZA: Metriche(4.0, 5.0, 0.5)}
+    assert soddisfa_criterio(Metriche(3.5, 5.0, 0.5), baseline)
+
+
+def test_il_criterio_senza_persistenza_e_un_errore() -> None:
+    with pytest.raises(ModelError, match="persistenza"):
+        soddisfa_criterio(Metriche(1.0, 1.0, 1.0), {MEDIA_STATO: Metriche(5.0, 6.0, 0.1)})
+
+
+# --------------------------------------------------------------------------- #
 # Dataset dal database (repository finto)
 # --------------------------------------------------------------------------- #
 
@@ -264,6 +302,8 @@ def test_integrazione_le_baseline_della_model_card(
         assert risultati[nome].rmse_kg == pytest.approx(rmse, abs=5e-4), nome
         assert risultati[nome].r2 == pytest.approx(r2, abs=5e-4), nome
     assert migliore_baseline(risultati)[0] == PERSISTENZA
+    # DA-05 confronta con il valore non arrotondato: 487,6114 kg di errore su 120 righe.
+    assert risultati[PERSISTENZA].mae_kg == pytest.approx(BASELINE_Q8[PERSISTENZA].mae_kg, abs=1e-9)
 
 
 @pytest.mark.integration

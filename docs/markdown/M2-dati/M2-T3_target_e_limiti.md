@@ -44,6 +44,12 @@ Quel numero diventa il **criterio di accettazione di M4**, dichiarato in
 anticipo. Un progetto che sa quale soglia deve battere è molto più credibile di
 uno che mostra un R² senza contesto.
 
+> **Aggiornamento (ottobre 2026, DA-05).** In M4-T1 la baseline di persistenza
+> (resa dell'anno prima) ha dato un MAE di 4,06 kg, più basso di 4,25. Il criterio
+> di M4 è diventato *battere la persistenza* sulla stessa verifica; 4,25 kg resta
+> come riferimento storico. Vedi
+> [`DA-05_criterio_di_accettazione.md`](../M4-machine-learning/DA-05_criterio_di_accettazione.md).
+
 L'R² negativo della prima riga dice una cosa precisa: predire la media del
 passato è *peggio* che predire la media del futuro, perché la resa è calata e il
 passato sovrastima sistematicamente.
@@ -102,7 +108,7 @@ qui quattro regole che diventano requisiti di M6-T5 e M6-T8:
 | Target scelto e motivato | ✅ con l'esclusione motivata delle altre cinque grandezze |
 | Sezione limiti di trasferibilità | ✅ cinque limiti, più la tabella di cosa possiamo e non possiamo dire |
 | Strategia di comunicazione definita | ✅ formato della previsione e quattro divieti |
-| *(oltre la DoD)* soglia di accettazione per M4 | ✅ MAE < 4,25 kg, misurata |
+| *(oltre la DoD)* soglia di accettazione per M4 | ✅ MAE < 4,25 kg, misurata (sostituita da DA-05 in M4) |
 
 ## Miglioramenti futuri
 

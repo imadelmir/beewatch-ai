@@ -1,7 +1,8 @@
 # Model card · Previsione della resa per colonia
 
-> **Stato** in costruzione: dati, validazione e baseline (M4-T1). Feature,
-> modelli, metriche finali, intervallo e limiti arrivano con M4-T2 … M4-T6.
+> **Stato** in costruzione: dati, validazione e baseline (M4-T1), criterio di
+> accettazione (DA-05). Feature, modelli, metriche finali, intervallo e limiti
+> arrivano con M4-T2 … M4-T6.
 > **Codice** `beewatch/ml/train.py` · **Test** `tests/test_train.py`
 
 ## Che cosa prevede
@@ -73,17 +74,24 @@ addestramento di 506 righe). Rifatte con questo codice su quelle righe:
 Gli stessi numeri sono controllati da test di integrazione sul database
 (`tests/test_train.py`).
 
-## Criterio di accettazione — da decidere (DA-05)
+## Criterio di accettazione (DA-05)
 
-M2-T3 ha dichiarato la soglia **MAE < 4,25 kg**. Sul dataset di training reale
-due baseline fanno già meglio: la tendenza (4,17) e la persistenza (4,06).
+Un modello soddisfa il criterio prestazionale **soltanto se**
+`MAE_modello < MAE_persistenza`, con le due metriche calcolate da `metriche()`
+sulle stesse 120 righe di verifica (2010–2012) del pannello Q8, sullo stesso
+target. Il confronto usa i valori **non arrotondati**: la persistenza vale
+**4,063428333… kg** (487,6114 kg di errore su 120 righe), e un modello che si
+scrive «4,06» può stare sopra o sotto. Nel codice: `soddisfa_criterio()`.
 
-| Opzione | Soglia |
-|---|---|
-| mantenere la soglia dichiarata in M2-T3 | MAE < 4,25 kg |
-| battere la baseline più forte (raccomandata nel documento di passaggio) | MAE < 4,06 kg |
+| Soglia | Valore | Ruolo |
+|---|---|---|
+| battere la persistenza (DA-05) | MAE < 4,063428… kg | **criterio** |
+| M2-T3 | MAE < 4,25 kg | riferimento storico: da sola non basta |
 
-La scelta va fatta prima di confrontare i modelli (M4-T3).
+Motivazione e coerenza con la specifica:
+[`DA-05_criterio_di_accettazione.md`](markdown/M4-machine-learning/DA-05_criterio_di_accettazione.md).
+Se nessun modello batte la persistenza, questa model card lo dirà senza
+indicare un vincitore.
 
 ## Da completare
 

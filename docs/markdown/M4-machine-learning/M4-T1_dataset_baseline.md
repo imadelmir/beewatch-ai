@@ -81,8 +81,9 @@ requisiti del docente; corrisponde all'opzione raccomandata di DA-07.
 | metriche di baseline calcolate e scritte in `docs/model_card.md` | `test_integrazione_le_baseline_della_model_card` (gli stessi numeri della tabella, dal database) |
 | *(backlog)* rifare le baseline di M2-T3 con lo stesso codice | `test_integrazione_sulle_626_righe_si_ritrovano_i_numeri_di_m2_t3`: 6,46, 5,73 e 4,06 coincidono; la tendenza dà 4,17 invece di 4,25, spiegato nella model card |
 
-## Decisione aperta
+## Decisione collegata
 
-**DA-05**, il criterio di accettazione: soglia di M2-T3 (MAE < 4,25 kg) o
-«battere la baseline più forte» (MAE < 4,06 kg)? Non blocca questa task, ma va
-decisa prima del confronto fra modelli (M4-T3).
+**DA-05**, aperta da questa task, è stata decisa dopo: un modello è accettabile
+solo se batte la persistenza sulla stessa verifica (`MAE_modello <
+MAE_persistenza`, valori non arrotondati). Vedi
+[`DA-05_criterio_di_accettazione.md`](DA-05_criterio_di_accettazione.md).

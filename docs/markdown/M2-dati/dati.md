@@ -587,6 +587,11 @@ Questo numero va in `docs/markdown/M4-machine-learning/` come criterio di accett
 va detto in sede di presentazione. Un progetto che dichiara la propria soglia di
 riferimento è molto più credibile di uno che mostra un R² senza contesto.
 
+> **Aggiornamento (ottobre 2026, DA-05).** La persistenza (resa dell'anno prima),
+> misurata in M4-T1, fa meglio: MAE 4,06 kg. Il criterio di M4 è battere la
+> persistenza sulla stessa verifica; 4,25 kg resta come riferimento storico
+> ([DA-05](../M4-machine-learning/DA-05_criterio_di_accettazione.md)).
+
 ---
 
 ## Limiti di trasferibilità
@@ -724,6 +729,6 @@ Deliberatamente fuori dallo scopo di M2:
 | R11 | Scorte > produzione: warning, non correzione | Plausibile, correggerla sarebbe inventare |
 | R12 | Quantità lette come interi | Tipi corretti fin dalla lettura |
 | T1 | Target: `resa_per_colonia_kg` | Unica grandezza biologica e indipendente dalla scala |
-| T2 | Soglia di accettazione per M4: MAE < 4,25 kg | Sotto quel valore bastano due medie e una retta |
+| T2 | Soglia di accettazione per M4: MAE < 4,25 kg (sostituita da DA-05: battere la persistenza) | Sotto quel valore bastano due medie e una retta |
 | T3 | La previsione si mostra come intervallo, mai come numero | L'80 % dei casi reali sta fra 18 e 40 kg |
 | T4 | Nessuna percentuale di accuratezza in interfaccia | Non significa nulla in una regressione |

@@ -43,6 +43,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 |---|---|---|
 | DA-04 | [Il dataset nel repository](markdown/M4-machine-learning/DA-04_dataset_nel_repository.md) | licenza verificata (CC0), checksum, ETL in Docker, piano del modello |
 | M4-T1 | [Dataset di training e baseline](markdown/M4-machine-learning/M4-T1_dataset_baseline.md) | Q8 dal database, split temporale, quattro baseline · [model card](model_card.md) |
+| DA-05 | [Il criterio di accettazione](markdown/M4-machine-learning/DA-05_criterio_di_accettazione.md) | il modello deve battere la persistenza (MAE < 4,0634 kg, non arrotondato); 4,25 kg resta storico |
 
 ### M6 · Interfaccia Streamlit
 
