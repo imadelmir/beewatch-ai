@@ -1,9 +1,10 @@
 # Model card · Previsione della resa per colonia
 
 > **Stato** in costruzione: dati, validazione e baseline (M4-T1), criterio di
-> accettazione (DA-05), feature (M4-T2). Modelli, metriche finali, intervallo e
-> limiti arrivano con M4-T3 … M4-T6.
-> **Codice** `beewatch/ml/train.py`, `beewatch/ml/features.py` · **Test** `tests/test_train.py`, `tests/test_features.py`
+> accettazione (DA-05), feature (M4-T2), confronto fra modelli (M4-T3).
+> Cross-validation, tuning, metriche finali, intervallo e limiti arrivano con
+> M4-T4 … M4-T6.
+> **Codice** `beewatch/ml/train.py`, `beewatch/ml/features.py` · **Notebook** `notebooks/02_modelli.ipynb` · **Test** `tests/test_train.py`, `tests/test_features.py`, `tests/test_confronto_modelli.py`
 
 ## Che cosa prevede
 
@@ -120,9 +121,82 @@ verifica 2010–2012 nessuna feature storica manca, e `resa_anno_prima` coincide
 con la previsione della persistenza. Motivazioni:
 [`M4-T2_feature_preprocessore.md`](markdown/M4-machine-learning/M4-T2_feature_preprocessore.md).
 
+## Confronto fra modelli (M4-T3)
+
+Tre Pipeline con lo stesso preprocessore (M4-T2) e tre regressori con gli
+iperparametri di default (il tuning è di M4-T5): **regressione lineare**
+(`LinearRegression`), **albero di decisione** (`DecisionTreeRegressor`),
+**random forest** (`RandomForestRegressor`, 100 alberi); `random_state = 42`.
+Codice: `crea_modelli()` e `confronta_modelli()` in `train.py`.
+
+Tutte le righe della tabella vengono dallo stesso `Confronto`: addestramento
+1998–2009 (480 righe), verifica **2010–2012, le stesse 120 righe** per modelli e
+baseline, stessa funzione `metriche()`. Kg per colonia:
+
+| | Tipo | MAE | RMSE | R² | DA-05 |
+|---|---|---|---|---|---|
+| **Random forest** | modello | **3,6558** | **4,5698** | **0,6088** | ✅ soddisfa |
+| Regressione lineare | modello | 4,0254 | 5,3358 | 0,4666 | ✅ soddisfa |
+| Persistenza | baseline | 4,0634 | 5,2964 | 0,4745 | riferimento |
+| Media dello stato + tendenza | baseline | 4,1681 | 5,4350 | 0,4466 | — |
+| Albero di decisione | modello | 5,5792 | 6,8581 | 0,1189 | ❌ non soddisfa |
+| Media dello stato | baseline | 5,7272 | 6,7982 | 0,1342 | — |
+| Media globale | baseline | 6,6546 | 8,3711 | −0,3128 | — |
+
+**Il criterio DA-05, sui valori non arrotondati** (MAE):
+
+| Modello | MAE | MAE − persistenza (4,063428333…) | Esito |
+|---|---|---|---|
+| Random forest | 3,655800750 | −0,407628 | soddisfa |
+| Regressione lineare | 4,025411865 | −0,038016 | soddisfa, di poco |
+| Albero di decisione | 5,579183333 | +1,515755 | non soddisfa |
+
+**Anno per anno** (MAE; media e deviazione standard dei tre anni). Il criterio si
+decide sulle 120 righe insieme; questa tabella dice quanto il risultato è stabile:
+
+| | 2010 | 2011 | 2012 | media ± dev. std |
+|---|---|---|---|---|
+| Random forest | 3,499 | 3,387 | 4,082 | 3,656 ± 0,373 |
+| Regressione lineare | 4,418 | 3,964 | 3,694 | 4,025 ± 0,366 |
+| Persistenza | 4,048 | 4,604 | **3,538** | 4,063 ± 0,533 |
+| Media dello stato + tendenza | 4,568 | 4,049 | 3,888 | 4,168 ± 0,355 |
+| Albero di decisione | 5,182 | 5,160 | 6,396 | 5,579 ± 0,707 |
+
+La «media ± deviazione standard» chiesta dal backlog qui è fra i tre anni di
+verifica; quella fra le pieghe della cross-validation temporale arriva con M4-T4.
+
+**Sensibilità al seed** (informativa, non usata per scegliere): con i seed 0–9 la
+random forest va da 3,613 a 3,778 di MAE, sempre sotto la persistenza; l'albero
+da 5,213 a 5,511. La regressione lineare non ha casualità.
+
+### Scelta
+
+**Random forest.** È il solo modello che batte la persistenza con un margine
+chiaro (−0,41 kg, il 10 %), su tutte e tre le metriche, e il margine regge con
+tutti i seed provati. La regressione lineare soddisfa DA-05 ma per 0,038 kg, e
+perde con la persistenza nel 2010 e nel 2012. L'albero singolo fa peggio di
+persistenza e tendenza, appena meglio della media dello stato: con gli
+iperparametri di default cresce senza limiti di profondità, e probabilmente
+impara il rumore dell'addestramento (il tuning di M4-T5 lo verificherà).
+
+Cosa questa scelta **non** dimostra:
+
+- la verifica 2010–2012 è servita anche a scegliere, quindi il 3,656 è un po'
+  ottimista; la cross-validation temporale sull'addestramento (M4-T4) dirà se il
+  vantaggio regge su altri anni;
+- nel 2012 la persistenza (3,538) fa meglio di tutti i modelli: il vantaggio è
+  sulla media dei tre anni, non su ogni anno;
+- 120 righe sono poche: differenze di qualche centesimo, come quella della
+  regressione lineare, non sono distinguibili dal caso.
+
+Il funzionamento tecnico (stesse righe, nessuna informazione dal futuro, seed
+riproducibile) è verificato dai test; il risultato prestazionale è quello della
+tabella. Il notebook `notebooks/02_modelli.ipynb` rifà il confronto dal database
+richiamando `train.py`. Motivazioni:
+[`M4-T3_confronto_modelli.md`](markdown/M4-machine-learning/M4-T3_confronto_modelli.md).
+
 ## Da completare
 
-- Modelli confrontati e scelta motivata (M4-T3)
 - Cross-validation temporale (M4-T4), tuning (M4-T5)
 - Metriche finali, residui, importanza delle variabili, intervallo di
   previsione, limiti, quando non usarlo (M4-T6)
