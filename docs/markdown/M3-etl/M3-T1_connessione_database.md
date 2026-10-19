@@ -96,7 +96,8 @@ transazioni e il testo originale del driver.
 prepara `<DB_NAME>_test`:
 
 1. crea il database in `utf8mb4`;
-2. vi applica `sql/schema.sql`, lo stesso file del database principale;
+2. vi applica `sql/schema.sql` e `sql/seed.sql`, gli stessi file del database
+   principale (il seed è stato aggiunto in M3-T2: servono le tabelle di riferimento);
 3. concede all'utente applicativo `SELECT, INSERT, UPDATE, DELETE` e basta.
 
 Il database principale non viene letto né modificato. Lo script è ripetibile.
@@ -174,8 +175,9 @@ i test **falliscono** con un messaggio chiaro, non vengono saltati.
 | unitari, driver simulato | `tests/test_database.py` | niente: `pytest -m "not integration"` |
 | integrazione, MySQL vero | `tests/test_database.py` (`@pytest.mark.integration`) | Docker in esecuzione: `pytest -m integration tests/test_database.py` |
 
-I test di integrazione scrivono in `stati_usa` del database di test (che nasce
-vuoto) con i codici riservati `Z1` e `Z2`, e tolgono solo quelle righe.
+I test di integrazione scrivono in `stati_usa` del database di test con i
+codici riservati `Z1` e `Z2` (non sono fra i 44 del seed), e tolgono solo
+quelle righe.
 
 ### Come si lanciano
 
