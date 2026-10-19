@@ -14,6 +14,8 @@ come sono:
   valutazione: baseline e modelli passano tutti da qui.
 - `valuta_baseline(dati)` misura le quattro baseline, il termine di paragone
   che un modello deve battere per avere senso.
+- `soddisfa_criterio(modello, baseline)` è il criterio di accettazione (DA-05):
+  MAE del modello strettamente minore di quello della persistenza.
 
 Le baseline prevedono un anno alla volta: per stimare l'anno *t* usano solo ciò
 che si sa alla fine dell'anno *t − 1* (la persistenza, in particolare, usa la
@@ -181,3 +183,25 @@ def valuta_baseline(
 def migliore_baseline(risultati: dict[str, Metriche]) -> tuple[str, Metriche]:
     """La baseline con il MAE più basso: quella con cui un modello deve confrontarsi."""
     return min(risultati.items(), key=lambda voce: voce[1].mae_kg)
+
+
+# --------------------------------------------------------------------------- #
+# Criterio di accettazione (DA-05)
+# --------------------------------------------------------------------------- #
+
+
+def soddisfa_criterio(modello: Metriche, baseline: dict[str, Metriche]) -> bool:
+    """DA-05: il modello è accettabile solo se `MAE_modello < MAE_persistenza`.
+
+    Entrambe le metriche devono venire da `metriche()` sulla stessa verifica
+    (pannello Q8, 2010–2012), cioè `baseline` è il risultato di `valuta_baseline`
+    sugli stessi dati del modello. Il confronto usa i valori non arrotondati: un
+    MAE che si scrive «4,06» come la persistenza può essere sopra o sotto.
+    La soglia di M2-T3 (MAE < 4,25 kg) resta solo come riferimento storico.
+
+    Raises:
+        ModelError: fra le baseline manca la persistenza.
+    """
+    if PERSISTENZA not in baseline:
+        raise ModelError("Il criterio DA-05 richiede la baseline di persistenza.")
+    return modello.mae_kg < baseline[PERSISTENZA].mae_kg

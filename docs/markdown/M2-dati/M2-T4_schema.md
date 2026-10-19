@@ -267,8 +267,8 @@ costruire il grafico *«cosa influenza la stima»* senza aggiungere una tabella.
 Le metriche stanno qui per tre motivi. Il docente chiede che il progetto le
 dichiari. L'interfaccia deve poter scrivere *«modello v1.2, errore medio
 3,8 kg»* accanto a una previsione, come stabilito in M2-T3. E la soglia di
-accettazione — **MAE inferiore a 4,25 kg** — diventa un confronto fra due
-numeri nel database, non un'opinione.
+accettazione — **MAE inferiore a 4,25 kg**, oggi *inferiore alla persistenza*
+(DA-05) — diventa un confronto fra due numeri nel database, non un'opinione.
 
 ### Tracciabilità
 
