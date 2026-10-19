@@ -36,6 +36,7 @@ Da riga di comando: `python scripts/run_etl.py`.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -52,6 +53,10 @@ logger = ottieni_logger(__name__)
 
 # R3: definizione internazionale esatta della libbra. Scritta una volta sola.
 LB_IN_KG = 0.45359237
+
+# Il file del repository, versione 2 di Kaggle (DA-04, data/README.md). Un file
+# diverso si carica lo stesso, ma il report e il log lo dicono.
+SHA256_DATASET_UFFICIALE = "70a831b5c9872904df3aa3fc4142a5749f968e7e64405f6e2e116c5c49ed038e"
 
 # Le colonne del CSV, nell'ordine della fonte. I nomi originali esistono solo qui.
 COLONNE_FONTE = (
@@ -300,6 +305,7 @@ class ReportETL:
     """Il resoconto di un'esecuzione dell'ETL."""
 
     file: Path
+    sha256: str
     lette: int
     scartate_per_motivo: dict[str, int]
     caricamento: EsitoCaricamento
@@ -310,10 +316,17 @@ class ReportETL:
     def scartate_totali(self) -> int:
         return sum(self.scartate_per_motivo.values())
 
+    @property
+    def versione_ufficiale(self) -> bool:
+        return self.sha256 == SHA256_DATASET_UFFICIALE
+
     def testo(self) -> str:
         righe = [
             "BeeWatch AI · ETL produzione USDA",
             f"File:            {self.file}",
+            f"SHA-256:         {self.sha256} "
+            + ("(versione ufficiale, data/README.md)" if self.versione_ufficiale
+               else "(NON e' la versione documentata in data/README.md)"),
             f"Righe lette:     {self.lette}",
             f"Righe scartate:  {self.scartate_totali}",
             *(f"  {motivo}: {n}" for motivo, n in self.scartate_per_motivo.items()),
@@ -341,6 +354,10 @@ def run_pipeline(percorso: Path, database: Database, cartella_report: Path) -> R
     inizio = time.monotonic()
     logger.info("ETL: lettura di %s", percorso)
     grezzo = extract(percorso)
+    sha256 = impronta(percorso)
+    if sha256 != SHA256_DATASET_UFFICIALE:
+        logger.warning("ETL: %s non e' la versione documentata del dataset (SHA-256 %s)",
+                       percorso.name, sha256)  # fmt: skip
     logger.info("ETL: %d righe lette, applicazione delle regole R1-R12", len(grezzo))
     puliti, scartati = transform(grezzo)
     logger.info("ETL: %d righe pulite, %d scartate", len(puliti), len(scartati))
@@ -352,6 +369,7 @@ def run_pipeline(percorso: Path, database: Database, cartella_report: Path) -> R
 
     report = ReportETL(
         file=percorso,
+        sha256=sha256,
         lette=len(grezzo),
         scartate_per_motivo=conteggio_scarti(scartati),
         caricamento=caricamento,
@@ -361,6 +379,11 @@ def run_pipeline(percorso: Path, database: Database, cartella_report: Path) -> R
     destinazione = _salva_report(report, cartella_report)
     logger.info("ETL: report salvato in %s", destinazione)
     return report
+
+
+def impronta(percorso: Path) -> str:
+    """Lo SHA-256 del file, per sapere quale versione del dataset si è caricata."""
+    return hashlib.sha256(Path(percorso).read_bytes()).hexdigest()
 
 
 def _salva_report(report: ReportETL, cartella: Path) -> Path:

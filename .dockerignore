@@ -16,11 +16,13 @@ htmlcov
 notebooks
 tests
 docs
-data
 sql
-scripts
-models
 logs
+# Di data/ entra solo il dataset USDA (DA-04): l'ETL si puo' lanciare anche dentro
+# il contenitore. models/ e scripts/ entrano interi: il modello addestrato e i
+# comandi `run_etl.py` (e, da M4-T7, `train_model.py`).
+data/*
+!data/honeyproduction.csv
 
 .env
 .env.example

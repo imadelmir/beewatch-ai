@@ -221,13 +221,16 @@ __marimo__/
 # BeeWatch AI
 # --------------------------------------------------------------------------- #
 
-# Dataset USDA: scaricato localmente, mai committato.
+# Dati: si ignora tutto tranne il dataset USDA ufficiale e la sua scheda (DA-04:
+# licenza CC0, vedi data/README.md). Qualunque altro file messo in data/ per prova
+# resta fuori dal repository.
 # ATTENZIONE: si ignora il CONTENUTO (data/*), non la cartella (data/).
 # Git non permette di ri-includere un file se la sua cartella e' esclusa:
-# con "data/" la riga "!data/.gitkeep" non avrebbe alcun effetto e chi clona
-# non troverebbe la cartella (vedi struttura, regola 6).
+# con "data/" le righe "!data/..." non avrebbero alcun effetto.
 data/*
 !data/.gitkeep
+!data/honeyproduction.csv
+!data/README.md
 
 # I modelli addestrati SONO committati (il docente deve poter clonare e
 # avviare l'app senza riaddestrare), quindi models/ non va ignorata.

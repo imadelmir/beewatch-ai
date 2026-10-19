@@ -158,6 +158,31 @@ def test_caso2_la_vecchia_configurazione_non_avrebbe_funzionato(stack_custom: St
 
 
 # --------------------------------------------------------------------------- #
+# DA-04 · il dataset è nell'immagine: l'ETL gira anche dentro il contenitore
+# --------------------------------------------------------------------------- #
+
+
+def test_da04_letl_nel_contenitore_carica_il_dataset_e_si_puo_rilanciare(
+    stack_custom: Stack,
+) -> None:
+    primo = stack_custom.nel_container("app", "python", "scripts/run_etl.py")
+    assert primo.returncode == 0, stack_custom.redigi(primo.stdout + primo.stderr)
+    assert "Righe lette:     626" in primo.stdout
+    assert "(versione ufficiale, data/README.md)" in primo.stdout
+
+    secondo = stack_custom.nel_container("app", "python", "scripts/run_etl.py")
+    assert secondo.returncode == 0, stack_custom.redigi(secondo.stderr)
+    assert "Invariate:       626" in secondo.stdout  # rilanciarlo non duplica
+
+    connessione = connetti_dal_computer(stack_custom, stack_custom.porta_db)
+    cursore = connessione.cursor()
+    cursore.execute("SELECT COUNT(*), COUNT(DISTINCT codice_stato) FROM produzione_usda")
+    assert cursore.fetchone() == (626, 44)
+    connessione.close()
+    assert stack_custom.password_app not in primo.stdout + primo.stderr
+
+
+# --------------------------------------------------------------------------- #
 # B-14 · docker compose up avvia tutto
 # --------------------------------------------------------------------------- #
 

@@ -117,16 +117,21 @@ alla volta.
 
 ### Il dataset
 
-Il dataset USDA **non è nel repository**: ha una licenza propria e non è nostro
-da ridistribuire.
+Il dataset USDA è **già nel repository**, in `data/honeyproduction.csv`: la
+licenza (CC0, pubblico dominio) lo permette. Provenienza, versione e checksum
+sono in [`data/README.md`](data/README.md).
 
-1. scaricalo da [Kaggle — Honey Production in the USA](https://www.kaggle.com/datasets/jessicali9530/honey-production)
-2. metti `honeyproduction.csv` nella cartella `data/`
-3. avvia MySQL e carica il dataset (si può rilanciare: non duplica nulla)
+Per caricarlo nel database (si può rilanciare: non duplica nulla):
 
 ```bash
 docker compose up -d mysql
 python scripts/run_etl.py
+```
+
+Oppure, senza Python sul computer, dentro il contenitore dell'app:
+
+```bash
+docker compose run --rm app python scripts/run_etl.py
 ```
 
 Come è fatto, cosa dice e cosa non può dire: [`docs/markdown/M2-dati/dati.md`](docs/markdown/M2-dati/dati.md).

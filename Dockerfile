@@ -45,6 +45,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY pyproject.toml README.md ./
 COPY beewatch/ ./beewatch/
 COPY app/ ./app/
+# Il dataset (DA-04), i comandi e i modelli addestrati: con questi un clone pulito
+# carica i dati e usa il modello senza installare nulla sul computer:
+#   docker compose run --rm app python scripts/run_etl.py
+COPY scripts/ ./scripts/
+COPY data/honeyproduction.csv ./data/
+COPY models/ ./models/
 
 # --no-deps: le dipendenze sono gia' installate sopra. Serve solo a rendere
 # `import beewatch` disponibile da qualsiasi cartella.
