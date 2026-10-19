@@ -38,9 +38,9 @@ import pandas as pd
 
 from beewatch.database import Database
 from beewatch.exceptions import ModelError
+from beewatch.ml.features import TARGET
 from beewatch.repositories_riferimento import ProduzioneUsdaRepository
 
-TARGET = "resa_per_colonia_kg"
 COLONNE_DATASET = ("codice_stato", "anno", "numero_colonie", TARGET)
 
 # M2-T3: si addestra sul 1998-2009, si verifica sul 2010-2012.
