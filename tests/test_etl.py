@@ -278,6 +278,17 @@ def test_r2_ogni_campo_vuoto_scarta_la_riga_senza_inventare_valori(scrivi_csv, r
     assert list(scartati["motivo"]) == ["campo_obbligatorio_mancante"]
 
 
+def test_r8_i_limiti_dellintervallo_sono_ammessi(scrivi_csv) -> None:
+    puliti, scartati = pulisci(
+        scrivi_csv,
+        '"AL",16000,71,1136000,159000,0.72,818000,1990',
+        '"AL",16000,71,1136000,159000,0.72,818000,2026',
+        anno_corrente=2026,
+    )
+    assert scartati.empty
+    assert list(puliti["anno"]) == [1990, 2026]
+
+
 def test_r8_lanno_corrente_e_quello_di_oggi_se_non_indicato(scrivi_csv) -> None:
     from datetime import date
 
