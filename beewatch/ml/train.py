@@ -16,6 +16,10 @@ come sono:
   che un modello deve battere per avere senso.
 - `soddisfa_criterio(modello, baseline)` è il criterio di accettazione (DA-05):
   MAE del modello strettamente minore di quello della persistenza.
+- `confronta_modelli(dati)` (M4-T3) addestra le tre Pipeline di `crea_modelli()`
+  sullo stesso addestramento e misura modelli e baseline sulle **stesse** righe
+  di verifica, con la stessa funzione; il `Confronto` dice quale modello, se
+  qualcuno, soddisfa DA-05.
 
 Le baseline prevedono un anno alla volta: per stimare l'anno *t* usano solo ciò
 che si sa alla fine dell'anno *t − 1* (la persistenza, in particolare, usa la
@@ -35,10 +39,14 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import Pipeline
+from sklearn.tree import DecisionTreeRegressor
 
 from beewatch.database import Database
 from beewatch.exceptions import ModelError
-from beewatch.ml.features import TARGET
+from beewatch.ml.features import TARGET, costruisci_feature_storiche, crea_preprocessore
 from beewatch.repositories_riferimento import ProduzioneUsdaRepository
 
 COLONNE_DATASET = ("codice_stato", "anno", "numero_colonie", TARGET)
@@ -51,6 +59,13 @@ MEDIA_GLOBALE = "media globale"
 MEDIA_STATO = "media dello stato"
 MEDIA_STATO_TREND = "media dello stato + tendenza annuale"
 PERSISTENZA = "persistenza (resa dell'anno prima)"
+
+# I modelli di M4-T3, nell'ordine della model card. Iperparametri di default:
+# la ricerca degli iperparametri è di M4-T5, e non si fa guardando la verifica.
+REGRESSIONE_LINEARE = "regressione lineare"
+ALBERO = "albero di decisione"
+RANDOM_FOREST = "random forest"
+SEED = 42
 
 
 # --------------------------------------------------------------------------- #
@@ -205,3 +220,86 @@ def soddisfa_criterio(modello: Metriche, baseline: dict[str, Metriche]) -> bool:
     if PERSISTENZA not in baseline:
         raise ModelError("Il criterio DA-05 richiede la baseline di persistenza.")
     return modello.mae_kg < baseline[PERSISTENZA].mae_kg
+
+
+# --------------------------------------------------------------------------- #
+# Confronto fra modelli (M4-T3)
+# --------------------------------------------------------------------------- #
+
+
+def crea_modelli(seed: int = SEED) -> dict[str, Pipeline]:
+    """Le tre Pipeline da confrontare: lo stesso preprocessore (M4-T2), tre regressori.
+
+    `seed` fissa la casualità di albero e foresta: lo stesso seed, lo stesso modello.
+    """
+    regressori = {
+        REGRESSIONE_LINEARE: LinearRegression(),
+        ALBERO: DecisionTreeRegressor(random_state=seed),
+        RANDOM_FOREST: RandomForestRegressor(random_state=seed),
+    }
+    return {
+        nome: Pipeline([("prep", crea_preprocessore()), ("modello", regressore)])
+        for nome, regressore in regressori.items()
+    }
+
+
+@dataclass(frozen=True, eq=False)
+class Confronto:
+    """Modelli e baseline previsti sulle stesse righe di verifica.
+
+    `previsioni` ha un vettore per nome (prima i modelli, poi le baseline), nello
+    stesso ordine delle righe di `verifica`: ogni metrica si calcola da qui, quindi
+    sempre sullo stesso campione.
+    """
+
+    verifica: pd.DataFrame
+    previsioni: dict[str, np.ndarray]
+    modelli: tuple[str, ...]
+
+    def risultati(self) -> dict[str, Metriche]:
+        """MAE, RMSE e R² di modelli e baseline su tutte le righe di verifica."""
+        return {nome: metriche(self.verifica[TARGET], p) for nome, p in self.previsioni.items()}
+
+    def risultati_per_anno(self) -> dict[str, dict[int, Metriche]]:
+        """Le stesse metriche, separate per anno di verifica."""
+        anni = self.verifica["anno"].to_numpy()
+        vero = self.verifica[TARGET].to_numpy()
+        return {
+            nome: {int(a): metriche(vero[anni == a], p[anni == a]) for a in np.unique(anni)}
+            for nome, p in self.previsioni.items()
+        }
+
+    def vincitore(self) -> str | None:
+        """Il modello con il MAE più basso fra quelli che soddisfano DA-05; None se nessuno."""
+        risultati = self.risultati()
+        baseline = {n: m for n, m in risultati.items() if n not in self.modelli}
+        accettati = [n for n in self.modelli if soddisfa_criterio(risultati[n], baseline)]
+        return min(accettati, key=lambda n: risultati[n].mae_kg) if accettati else None
+
+
+def confronta_modelli(
+    dati: pd.DataFrame,
+    seed: int = SEED,
+    ultimo_anno_addestramento: int = ULTIMO_ANNO_ADDESTRAMENTO,
+) -> Confronto:
+    """Addestra i modelli sull'addestramento e prevede con loro e con le baseline la verifica.
+
+    Le feature di ogni riga usano solo gli anni precedenti (M4-T2): per il 2011 la
+    resa vera del 2010, come la persistenza. Il target non entra mai fra gli
+    ingressi dei modelli, neanche nelle righe di addestramento.
+
+    Raises:
+        ModelError: indice di `dati` non univoco, split vuoto, baseline non calcolabile.
+    """
+    if not dati.index.is_unique:
+        raise ModelError("L'indice del dataset deve identificare una riga sola.")
+    addestramento, verifica = dividi_temporale(dati, ultimo_anno_addestramento)
+    ingressi = costruisci_feature_storiche(dati).drop(columns=[TARGET])
+
+    modelli = crea_modelli(seed)
+    previsioni: dict[str, np.ndarray] = {}
+    for nome, modello in modelli.items():
+        modello.fit(ingressi.loc[addestramento.index], addestramento[TARGET])
+        previsioni[nome] = modello.predict(ingressi.loc[verifica.index])
+    previsioni.update(previsioni_baseline(addestramento, verifica, dati))
+    return Confronto(verifica=verifica, previsioni=previsioni, modelli=tuple(modelli))
