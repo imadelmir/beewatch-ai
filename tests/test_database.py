@@ -13,8 +13,8 @@ in un log.
 temporaneo e isolato (fixture `stack_mysql` in `conftest.py`), sul database separato
 `<DB_NAME>_test` creato da `sql/00_test_db.sh`. Il database e il volume dello
 sviluppatore non vengono toccati. L'utente applicativo ha solo SELECT, INSERT, UPDATE
-e DELETE: i test scrivono in `stati_usa` (vuota nel database di test) con codici
-riservati e tolgono soltanto le righe che hanno creato, con DELETE.
+e DELETE: i test scrivono in `stati_usa` con codici riservati (`Z1`, `Z2`: non sono
+fra i 44 del seed) e tolgono soltanto le righe che hanno creato, con DELETE.
 """
 
 from __future__ import annotations
@@ -618,7 +618,7 @@ def test_lo_script_del_db_di_test_concede_solo_dml() -> None:
     assert "CREATE USER" not in codice
     # Lo schema si riusa, non si copia: nello script non ci sono tabelle.
     assert "CREATE TABLE" not in codice
-    assert "schema.sql" in codice
+    assert "schema.sql" in codice and "seed.sql" in codice
 
 
 def test_lo_script_del_db_di_test_funziona_anche_incluso_con_source() -> None:
@@ -891,7 +891,7 @@ def test_integrazione_server_spento_si_ritenta_poi_errore_e_verifica_rapida(
 
 
 @pytest.mark.integration
-def test_integrazione_il_db_di_test_ha_lo_stesso_schema_del_principale_in_utf8mb4(
+def test_integrazione_il_db_di_test_ha_schema_e_seed_del_principale_in_utf8mb4(
     stack_mysql: Stack,
 ) -> None:
     def tabelle(schema: str) -> str:
@@ -910,8 +910,12 @@ def test_integrazione_il_db_di_test_ha_lo_stesso_schema_del_principale_in_utf8mb
         f"FROM information_schema.schemata WHERE schema_name = '{NOME_DB_TEST}'",
     )
     assert codifica.split() == ["utf8mb4", "utf8mb4_unicode_ci"]
-    # Il seed è del database principale: quello di test nasce vuoto.
-    assert _come_root(stack_mysql, f"SELECT COUNT(*) FROM {NOME_DB_TEST}.stati_usa").strip() == "0"
+    # Anche il seed è lo stesso: le tabelle di riferimento sono quelle del principale.
+    for tabella in ("stati_usa", "stati_alveare", "livelli_rischio", "tipi_miele"):
+        conteggio = f"SELECT COUNT(*) FROM {{}}.{tabella}"
+        assert _come_root(stack_mysql, conteggio.format(NOME_DB_TEST)) == _come_root(
+            stack_mysql, conteggio.format(DB_NAME)
+        ), tabella
 
 
 @pytest.mark.integration

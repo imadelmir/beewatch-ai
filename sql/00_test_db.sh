@@ -8,8 +8,11 @@
 # principale). Fa tre cose, e le fa root:
 #
 #   1. crea il database, in utf8mb4;
-#   2. vi applica `schema.sql`, lo stesso file del database principale (che non
-#      nomina mai il database: per questo si puo' riusare cosi' com'e');
+#   2. vi applica `schema.sql` e `seed.sql`, gli stessi file del database
+#      principale (non nominano mai il database: per questo si riusano cosi' come
+#      sono). Il seed porta le tabelle di riferimento (stati dell'alveare, livelli
+#      di rischio, tipi di miele, stati USA) che modelli, repository ed ETL danno
+#      per scontate, e l'apiario dimostrativo;
 #   3. concede all'utente applicativo SELECT, INSERT, UPDATE, DELETE e nient'altro.
 #
 # L'utente applicativo non puo' creare ne' cancellare tabelle, nemmeno qui: e' lo
@@ -47,13 +50,14 @@ beewatch_crea_db_test() {
         fi
     done
 
-    local cartella schema
+    local cartella file_sql
     cartella="$(dirname "${BASH_SOURCE[0]}")"
-    schema="${cartella}/schema.sql"
-    if [ ! -r "${schema}" ]; then
-        echo "BeeWatch: database di test NON creato: ${schema} non si puo' leggere." >&2
-        return 1
-    fi
+    for file_sql in schema.sql seed.sql; do
+        if [ ! -r "${cartella}/${file_sql}" ]; then
+            echo "BeeWatch: database di test NON creato: ${cartella}/${file_sql} non si puo' leggere." >&2
+            return 1
+        fi
+    done
 
     local nome="${MYSQL_DATABASE}_test"
 
@@ -83,11 +87,15 @@ SQL
         return 1
     fi
 
-    if ! MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" "${client[@]}" --database="${nome}" \
-        < "${schema}" > /dev/null; then
-        echo "BeeWatch: database di test incompleto: schema.sql non e' stato applicato." >&2
-        return 1
-    fi
+    # Prima lo schema, poi il seed. Entrambi sono idempotenti: rilanciare lo script
+    # non duplica nulla.
+    for file_sql in schema.sql seed.sql; do
+        if ! MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" "${client[@]}" --database="${nome}" \
+            < "${cartella}/${file_sql}" > /dev/null; then
+            echo "BeeWatch: database di test incompleto: ${file_sql} non e' stato applicato." >&2
+            return 1
+        fi
+    done
 
     # Prima si toglie tutto, poi si concede il necessario: cosi' il risultato e' lo
     # stesso anche se lo script viene rilanciato o se l'utente aveva altri privilegi.
@@ -100,7 +108,7 @@ SQL
         return 1
     fi
 
-    echo "BeeWatch: database di test \`${nome}\` pronto (schema applicato, solo privilegi DML)."
+    echo "BeeWatch: database di test \`${nome}\` pronto (schema e seed applicati, solo privilegi DML)."
 }
 
 beewatch_crea_db_test
