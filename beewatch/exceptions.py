@@ -78,7 +78,8 @@ class ModelError(BeeWatchError):
 
     Casi tipici: il file .joblib indicato da MODEL_PATH non esiste perché non
     è ancora stato addestrato, oppure è stato salvato con una versione di
-    scikit-learn incompatibile.
+    scikit-learn incompatibile. Anche: il database non contiene i dati per
+    addestrarlo o valutarlo (l'ETL non è stato lanciato).
     """
 
 
