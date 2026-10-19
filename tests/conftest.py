@@ -15,9 +15,18 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from docker_support import (
+    DB_NAME,
+    DB_USER,
+    Stack,
+    docker_pronto,
+    fotografia_risorse_reali,
+    porta_libera,
+)
 
 from beewatch import config, logging_config
-from beewatch.config import ottieni
+from beewatch.config import ConfigDatabase, ottieni
+from beewatch.database import Database
 
 # Le variabili lette da beewatch.config, più DB_ROOT_PASSWORD: la config non la
 # legge, ma i test la usano come segreto e non deve venire dal computer di chi
@@ -105,3 +114,58 @@ def logging_azzerato() -> Iterator[None]:
     logging_config.azzera()
     yield
     logging_config.azzera()
+
+
+# --------------------------------------------------------------------------- #
+# MySQL vero per i test di integrazione del livello dati
+# --------------------------------------------------------------------------- #
+# Questi test non usano mai il database dello sviluppatore: girano su uno stack
+# Docker temporaneo (progetto, contenitore e volume propri, credenziali casuali:
+# vedi `docker_support.Stack`), e dentro quello stack sul database separato
+# `<DB_NAME>_test`, creato da `sql/00_test_db.sh`. La configurazione è costruita
+# qui a mano: niente `.env`, niente `os.environ`.
+
+
+@pytest.fixture(scope="session")
+def stack_mysql(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
+    """Un MySQL isolato, avviato alla prima richiesta e smontato a fine sessione.
+
+    Se Docker non è in esecuzione il test FALLISCE: un test di integrazione
+    saltato in silenzio sembrerebbe superato. Una sentinella confronta le
+    risorse reali (contenitori e volume di sviluppo) prima e dopo.
+    """
+    if not docker_pronto():
+        pytest.fail(
+            "I test di integrazione del database richiedono Docker in esecuzione: "
+            "avvia Docker Desktop, oppure lancia solo `pytest -m \"not integration\"`.",
+            pytrace=False,
+        )
+    prima = fotografia_risorse_reali()
+    stack = Stack(tmp_path_factory.mktemp("stack_mysql"), porta_libera())
+    try:
+        stack.avvia(costruisci=False, servizi=("mysql",))
+        yield stack
+    finally:
+        stack.smonta()
+    dopo = fotografia_risorse_reali()
+    assert dopo == prima, f"le risorse reali sono cambiate durante i test: {prima} -> {dopo}"
+
+
+@pytest.fixture(scope="session")
+def config_db_test(stack_mysql: Stack) -> ConfigDatabase:
+    """La configurazione del database di TEST dello stack isolato, mai di quello principale."""
+    nome = f"{DB_NAME}_test"
+    assert nome != DB_NAME and nome.endswith("_test")
+    return ConfigDatabase(
+        host="127.0.0.1",
+        porta=stack_mysql.porta_db,
+        nome=nome,
+        utente=DB_USER,
+        password=stack_mysql.password_app,
+    )
+
+
+@pytest.fixture
+def database_test(config_db_test: ConfigDatabase) -> Database:
+    """Un `Database` sul database di test. È quello che useranno anche i repository."""
+    return Database(config_db_test)

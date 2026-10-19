@@ -141,6 +141,21 @@ def test_anche_lavvio_con_un_nome_reale_abortisce(stack: Stack, docker: DockerFi
     assert docker.comandi == []
 
 
+def test_lavvio_di_soli_alcuni_servizi_li_passa_a_compose(
+    stack: Stack, docker: DockerFinto
+) -> None:
+    stack.avvia(costruisci=False, servizi=("mysql",))
+    su = [c for c in docker.comandi if "up" in c]
+    assert len(su) == 1 and su[0][-1] == "mysql"
+    assert "--build" not in su[0]
+
+    docker.comandi.clear()
+    stack.avvia(costruisci=False)  # senza `servizi`: tutto lo stack, come prima
+    su = [c for c in docker.comandi if "up" in c]
+    assert su[0][-1] == "300"  # l'ultimo argomento è il valore di --wait-timeout
+    assert docker.nomina_risorse_reali() == []
+
+
 # --------------------------------------------------------------------------- #
 # Ultima barriera: nessun comando può nominare una risorsa reale
 # --------------------------------------------------------------------------- #

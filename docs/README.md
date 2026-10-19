@@ -26,6 +26,12 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | M2-T5 | [Schema SQL e Docker](markdown/M2-dati/M2-T5_schema_sql.md) | il DDL e il contenitore MySQL |
 | M2-T6 | [Seed e apiario demo](markdown/M2-dati/M2-T6_seed_demo.md) | valori fissi e dati dimostrativi |
 
+### M3 · Accesso ai dati ed ETL
+
+| Task | Documento | Cosa contiene |
+|---|---|---|
+| M3-T1 | [Connessione al database](markdown/M3-etl/M3-T1_connessione_database.md) | classe `Database`, transazioni, retry, errori, database di test |
+
 ### M6 · Interfaccia Streamlit
 
 | Documento | Cosa contiene |
