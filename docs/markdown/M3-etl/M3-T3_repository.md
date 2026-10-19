@@ -117,8 +117,8 @@ le cascate portano via tutto ciò che hanno scritto.
 
 - La suite rapida (senza MySQL) copre i repository solo in parte (35% e 50%):
   le query si provano sul database vero. Con i test di integrazione la
-  copertura è 100% righe e rami su entrambi i file. Il job CI con MySQL arriva
-  in M3-T6.
+  copertura è 100% righe e rami su entrambi i file, anche nel job CI
+  `integrazione` (M3-T6).
 - Le date di Q1, Q3 e Q6 vengono da `CURDATE()` di MySQL, quelle dei modelli da
   `date.today()` del computer: a cavallo della mezzanotte, con fusi diversi,
   possono differire di un giorno.

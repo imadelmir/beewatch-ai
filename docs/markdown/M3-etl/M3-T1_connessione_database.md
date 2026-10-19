@@ -209,11 +209,12 @@ va quindi in errore. Per il ciclo di lavoro quotidiano si usa la suite rapida.
 
 ## Limiti conosciuti
 
-- I test di integrazione non girano ancora su GitHub: la CI esegue solo
-  `pytest -m "not integration"`. Il job con MySQL è previsto in M3-T6.
-- `DatabaseError` non espone il numero d'errore di MySQL: chi deve distinguere,
-  per esempio, una chiave duplicata oggi può solo guardare `__cause__`. Si
-  decide in M3-T3, quando i repository ne avranno bisogno.
+- I test di integrazione girano su GitHub nel job `integrazione` (aggiunto in
+  M3-T6), che però non è obbligatorio per il merge: lo è solo «Lint e test».
+- `DatabaseError` non espone il numero d'errore di MySQL. In M3-T3 i repository
+  hanno scelto di controllare nome e codice duplicati *prima* di scrivere,
+  quindi oggi non serve; chi ne avesse bisogno trova l'eccezione originale in
+  `__cause__`.
 - `beewatch/healthcheck.py` continua a collegarsi a MySQL per conto proprio: è
   un controllo di salute, non deve ritentare né scrivere nei log dell'app.
 - Lo script del database di test presume che l'utente applicativo sia
@@ -225,5 +226,4 @@ va quindi in errore. Per il ciclo di lavoro quotidiano si usa la suite rapida.
 ## Miglioramenti futuri
 
 - Pool di connessioni, solo se le misure mostreranno che serve.
-- Job CI con MySQL per i test `integration` (M3-T6).
 - Aggiornare `docs/diagrams/architecture.drawio` con il livello dati.

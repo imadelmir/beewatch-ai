@@ -123,6 +123,10 @@ def test_valori_al_limite_ammessi() -> None:
     crea(Raccolto, quantita_kg="0.01")
     crea(Raccolto, quantita_kg="9999.99")
     crea(Previsione, stima_kg=20, limite_inferiore_kg=20, limite_superiore_kg=20)
+    # Le lunghezze massime delle colonne VARCHAR sono ammesse, un carattere in più no.
+    crea(Apiario, nome="x" * 120, localita="y" * 160)
+    crea(Alveare, codice="A" * 20)
+    crea(Previsione, versione_modello="v" * 40)
 
 
 def test_note_e_coordinate_non_compaiono_nella_rappresentazione() -> None:
