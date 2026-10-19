@@ -32,6 +32,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 |---|---|---|
 | M3-T1 | [Connessione al database](markdown/M3-etl/M3-T1_connessione_database.md) | classe `Database`, transazioni, retry, errori, database di test |
 | M3-T2 | [Modelli di dominio](markdown/M3-etl/M3-T2_modelli_dominio.md) | entità con validazione, Enum dei valori fissi |
+| M3-T3 | [Repository](markdown/M3-etl/M3-T3_repository.md) | tutto l'SQL del progetto, query Q1–Q11, isolamento fra utenti |
 
 ### M6 · Interfaccia Streamlit
 
