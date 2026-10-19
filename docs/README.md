@@ -42,6 +42,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | Task | Documento | Cosa contiene |
 |---|---|---|
 | DA-04 | [Il dataset nel repository](markdown/M4-machine-learning/DA-04_dataset_nel_repository.md) | licenza verificata (CC0), checksum, ETL in Docker, piano del modello |
+| M4-T1 | [Dataset di training e baseline](markdown/M4-machine-learning/M4-T1_dataset_baseline.md) | Q8 dal database, split temporale, quattro baseline · [model card](model_card.md) |
 
 ### M6 · Interfaccia Streamlit
 
