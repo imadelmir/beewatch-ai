@@ -320,12 +320,18 @@ volumes:
         )  # fmt: skip
         return esito.stdout.strip()
 
-    def avvia(self, costruisci: bool = True) -> None:
-        """`docker compose up --wait` (con `--build` se richiesto). Verifica i nomi prima."""
+    def avvia(self, costruisci: bool = True, servizi: tuple[str, ...] = ()) -> None:
+        """`docker compose up --wait` (con `--build` se richiesto). Verifica i nomi prima.
+
+        Con `servizi` avvia solo quelli (es. `("mysql",)` per i test del livello dati,
+        che non hanno bisogno dell'app né della sua immagine).
+        """
         self._verifica_nomi()
         self._verifica_configurazione()
         opzioni = ["--build"] if costruisci else []
-        self.compose("up", "-d", *opzioni, "--wait", "--wait-timeout", "300", timeout=1500)
+        self.compose(
+            "up", "-d", *opzioni, "--wait", "--wait-timeout", "300", *servizi, timeout=1500
+        )  # fmt: skip
 
     def smonta(self) -> None:
         """Toglie tutto ciò che appartiene a questo stack, e nient'altro.
