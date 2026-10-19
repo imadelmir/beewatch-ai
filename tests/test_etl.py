@@ -1,4 +1,4 @@
-"""Test dell'ETL USDA: `extract` e `transform` (M3-T4).
+"""Test dell'ETL USDA: `extract` e `transform` (M3-T4), `load`, pipeline e CLI (M3-T5).
 
 Nessun database e nessun file vero: ogni test scrive il proprio piccolo CSV in
 una cartella temporanea. Si verifica che:
@@ -13,6 +13,8 @@ una cartella temporanea. Si verifica che:
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
@@ -21,11 +23,16 @@ import pytest
 from beewatch.etl import (
     COLONNE_PULITE,
     LB_IN_KG,
+    EsitoCaricamento,
+    ReportETL,
+    _salva_report,
     conteggio_scarti,
     extract,
+    load,
+    run_pipeline,
     transform,
 )
-from beewatch.exceptions import ETLError
+from beewatch.exceptions import DatabaseError, ETLError
 
 INTESTAZIONE = '"state","numcol","yieldpercol","totalprod","stocks","priceperlb","prodvalue","year"'
 
@@ -324,3 +331,216 @@ def test_il_fattore_di_conversione_e_scritto_una_volta_sola() -> None:
         f.read_text(encoding="utf-8").count("0.45359237") for f in pacchetto.rglob("*.py")
     )
     assert occorrenze == 1
+
+
+# =========================================================================== #
+# Load, pipeline e CLI (M3-T5)
+# =========================================================================== #
+
+
+def test_il_repository_carica_le_colonne_prodotte_da_transform() -> None:
+    from beewatch.repositories_riferimento import COLONNE_PRODUZIONE
+
+    assert COLONNE_PRODUZIONE == COLONNE_PULITE
+
+
+def _report(scartate: pd.DataFrame | None = None, **valori) -> ReportETL:
+    base = {
+        "file": Path("data/honey.csv"),
+        "lette": 5,
+        "scartate_per_motivo": {"stato_non_valido": 1},
+        "caricamento": EsitoCaricamento(inserite=3, aggiornate=1, invariate=0),
+        "durata_secondi": 0.4567,
+        "scartate": scartate if scartate is not None else pd.DataFrame(),
+    }
+    return ReportETL(**{**base, **valori})
+
+
+def test_il_report_dice_lette_scartate_per_motivo_inserite_aggiornate_invariate_durata() -> None:
+    scartate = pd.DataFrame(
+        [{"riga": 4, "state": "PR", "year": 1999, "motivo": "stato_non_valido"}]
+    )
+    testo = _report(scartate).testo()
+
+    for atteso in (
+        "Righe lette:     5",
+        "Righe scartate:  1",
+        "  stato_non_valido: 1",
+        "Inserite:        3",
+        "Aggiornate:      1",
+        "Invariate:       0",
+        "Durata:          0.46 s",
+        "  4  PR  1999  stato_non_valido",
+    ):
+        assert atteso in testo
+
+
+def test_il_report_salvato_non_sovrascrive_quello_precedente(tmp_path: Path) -> None:
+    primo = _salva_report(_report(), tmp_path)
+    secondo = _salva_report(_report(lette=6), tmp_path)
+
+    assert primo != secondo
+    assert "Righe lette:     5" in primo.read_text(encoding="utf-8")
+    assert "Righe lette:     6" in secondo.read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def cli(logging_azzerato: None):
+    """`scripts/run_etl.py` caricato come modulo: `main()` gira nello stesso processo, così
+    valgono l'ambiente isolato di `ambiente_pulito` e i log nella cartella temporanea."""
+    import importlib.util
+
+    percorso = Path(__file__).resolve().parents[1] / "scripts" / "run_etl.py"
+    specifica = importlib.util.spec_from_file_location("run_etl", percorso)
+    modulo = importlib.util.module_from_spec(specifica)
+    specifica.loader.exec_module(modulo)
+    return modulo
+
+
+def test_cli_aiuto(cli, capsys) -> None:
+    with pytest.raises(SystemExit) as uscita:
+        cli.main(["--help"])
+    assert uscita.value.code == 0
+    assert "--file" in capsys.readouterr().out
+
+
+def test_cli_file_assente_esce_con_1_e_un_messaggio_senza_traceback(
+    cli, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+) -> None:
+    for nome, valore in {"DB_NAME": "x", "DB_USER": "y", "DB_PASSWORD": "PW-ETL-cli"}.items():
+        monkeypatch.setenv(nome, valore)
+
+    codice = cli.main(["--file", str(tmp_path / "manca.csv"), "--report-dir", str(tmp_path)])
+
+    uscita = capsys.readouterr()
+    assert codice == 1
+    assert uscita.err.startswith("ETL non eseguito: Il file del dataset non esiste")
+    assert "Traceback" not in uscita.err and "PW-ETL-cli" not in uscita.err
+    assert list(tmp_path.glob("etl_*.txt")) == []  # nessun report per un ETL non eseguito
+
+
+# -- integrazione: MySQL vero, database di test ------------------------------ #
+
+STATI_DEL_TEST = ("AL", "IA", "WY", "NE")
+NEBRASKA_2006 = '"NE",47000,73,3431000,3843000,0.93,3191000,2006'
+
+
+@pytest.fixture
+def produzione_pulita(database_test) -> Iterator[None]:
+    """Toglie prima e dopo le righe degli stati usati qui, e solo quelle."""
+
+    def _pulisci() -> None:
+        with database_test.transazione() as cursore:
+            cursore.execute(
+                "DELETE FROM produzione_usda WHERE codice_stato IN (%s, %s, %s, %s)",
+                STATI_DEL_TEST,
+            )
+
+    _pulisci()
+    yield
+    _pulisci()
+
+
+def _nel_database(database_test) -> dict[tuple[str, int], dict]:
+    with database_test.transazione() as cursore:
+        cursore.execute(
+            "SELECT * FROM produzione_usda WHERE codice_stato IN (%s, %s, %s, %s)",
+            STATI_DEL_TEST,
+        )
+        return {(r["codice_stato"], r["anno"]): r for r in cursore.fetchall()}
+
+
+@pytest.mark.integration
+def test_integrazione_load_inserisce_poi_non_duplica_poi_aggiorna(
+    scrivi_csv, database_test, produzione_pulita
+) -> None:
+    puliti, _ = pulisci(scrivi_csv, ALABAMA_1998, IOWA_2005, WYOMING_2012)
+
+    assert load(puliti, database_test) == EsitoCaricamento(3, 0, 0)
+    assert load(puliti, database_test) == EsitoCaricamento(0, 0, 3)  # idempotente
+
+    cambiati = puliti.copy()
+    cambiati.loc[0, "numero_colonie"] = 17000
+    assert load(cambiati, database_test) == EsitoCaricamento(0, 1, 2)
+
+    righe = _nel_database(database_test)
+    assert len(righe) == 3
+    alabama = righe[("AL", 1998)]
+    assert alabama["numero_colonie"] == 17000
+    # Il database conserva 4 decimali (DECIMAL(8,4)): sono i valori di dati.md.
+    assert alabama["resa_per_colonia_kg"] == Decimal("32.2051")
+    assert alabama["prezzo_per_kg_usd"] == Decimal("1.5873")
+    assert alabama["produzione_totale_kg"] == Decimal("515280.9323")
+    assert alabama["valore_produzione_usd"] == Decimal("818000.00")
+
+
+@pytest.mark.integration
+def test_integrazione_un_errore_a_meta_non_lascia_scritture_parziali(
+    scrivi_csv, database_test, produzione_pulita
+) -> None:
+    puliti, _ = pulisci(scrivi_csv, ALABAMA_1998, IOWA_2005, WYOMING_2012)
+    rotti = puliti.copy()
+    rotti.loc[2, "resa_per_colonia_kg"] = -1.0  # viola il CHECK del database, all'ultima riga
+
+    with pytest.raises(DatabaseError):
+        load(rotti, database_test)
+
+    assert _nel_database(database_test) == {}  # nemmeno le prime due righe
+
+
+@pytest.mark.integration
+def test_integrazione_seed_mancante_etl_error_prima_di_scrivere(
+    scrivi_csv, database_test, produzione_pulita
+) -> None:
+    puliti, _ = pulisci(scrivi_csv, ALABAMA_1998)
+    con_stato_ignoto = pd.concat([puliti, puliti.assign(codice_stato="ZZ")], ignore_index=True)
+
+    with pytest.raises(ETLError, match=r"stati_usa non contiene 1 stati del dataset \(ZZ\)"):
+        load(con_stato_ignoto, database_test)
+    assert _nel_database(database_test) == {}
+
+
+@pytest.mark.integration
+def test_integrazione_due_esecuzioni_della_pipeline_stesse_righe_e_report_su_file(
+    scrivi_csv, database_test, produzione_pulita, tmp_path: Path
+) -> None:
+    percorso = scrivi_csv(ALABAMA_1998, IOWA_2005, '"PR",1,1,1,1,1,1,2000', NEBRASKA_2006)
+    cartella = tmp_path / "report"
+
+    primo = run_pipeline(percorso, database_test, cartella)
+    righe_dopo_il_primo = len(_nel_database(database_test))
+    secondo = run_pipeline(percorso, database_test, cartella)
+
+    assert righe_dopo_il_primo == len(_nel_database(database_test)) == 3
+    assert (primo.lette, primo.scartate_per_motivo) == (4, {"stato_non_valido": 1})
+    assert primo.caricamento == EsitoCaricamento(3, 0, 0)
+    assert secondo.caricamento == EsitoCaricamento(0, 0, 3)
+    salvati = sorted(cartella.glob("etl_*.txt"))
+    assert len(salvati) == 2
+    assert primo.testo() in {s.read_text(encoding="utf-8") for s in salvati}
+
+
+@pytest.mark.integration
+def test_integrazione_la_cli_popola_il_database_e_stampa_il_report(
+    cli, scrivi_csv, config_db_test, database_test, produzione_pulita,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys,
+) -> None:  # fmt: skip
+    for nome, valore in {
+        "DB_HOST": config_db_test.host,
+        "DB_PORT": str(config_db_test.porta),
+        "DB_NAME": config_db_test.nome,
+        "DB_USER": config_db_test.utente,
+        "DB_PASSWORD": config_db_test.password,
+    }.items():
+        monkeypatch.setenv(nome, valore)
+
+    codice = cli.main(
+        ["--file", str(scrivi_csv(ALABAMA_1998, WYOMING_2012)), "--report-dir", str(tmp_path)]
+    )
+
+    uscita = capsys.readouterr()
+    assert codice == 0, uscita.err
+    assert "Inserite:        2" in uscita.out
+    assert config_db_test.password not in uscita.out + uscita.err
+    assert set(_nel_database(database_test)) == {("AL", 1998), ("WY", 2012)}
+    assert len(list(tmp_path.glob("etl_*.txt"))) == 1

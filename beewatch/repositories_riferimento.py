@@ -7,12 +7,14 @@ dove il dato è di un utente, un metodo una transazione.
 - `DashboardRepository`: le caselle della dashboard (Q1);
 - `UtentiRepository`: la cancellazione di un utente e di tutti i suoi dati (Q11);
 - `ProduzioneUsdaRepository`: la serie storica USDA (Q7), il pannello di
-  addestramento (Q8) e i codici di `stati_usa`;
+  addestramento (Q8), i codici di `stati_usa` e il caricamento dell'ETL;
 - `PrevisioniRepository`: salvataggio e storico delle stime (Q9);
 - `ConversazioniRepository`: lettura di una conversazione (Q10).
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterable
 
 from beewatch.models import Previsione
 from beewatch.repositories import (
@@ -53,6 +55,18 @@ class UtentiRepository(_Repository):
 # Q8: solo gli stati con tutti i 15 anni del dataset (regola R10 di M2-T2).
 ANNI_SERIE_COMPLETA = 15
 
+# Le colonne che l'ETL carica in `produzione_usda` (sono quelle di `etl.COLONNE_PULITE`).
+COLONNE_PRODUZIONE = (
+    "codice_stato", "anno", "numero_colonie", "resa_per_colonia_kg", "produzione_totale_kg",
+    "scorte_kg", "prezzo_per_kg_usd", "valore_produzione_usd",
+)  # fmt: skip
+_AGGIORNABILI = COLONNE_PRODUZIONE[2:]  # tutto tranne la chiave naturale
+_UPSERT_PRODUZIONE = (
+    f"INSERT INTO produzione_usda ({', '.join(COLONNE_PRODUZIONE)}) "
+    f"VALUES ({', '.join(['%s'] * len(COLONNE_PRODUZIONE))}) AS nuovo "
+    "ON DUPLICATE KEY UPDATE " + ", ".join(f"{c} = nuovo.{c}" for c in _AGGIORNABILI)
+)
+
 
 class ProduzioneUsdaRepository(_Repository):
     def serie_storica_stato(self, codice_stato: str) -> list[Riga]:
@@ -76,6 +90,25 @@ class ProduzioneUsdaRepository(_Repository):
     def codici_stati(self) -> set[str]:
         """I codici presenti in `stati_usa` (li carica il seed)."""
         return {r["codice"] for r in self._righe("SELECT codice FROM stati_usa")}
+
+    def carica(self, righe: Iterable[Riga]) -> tuple[int, int, int]:
+        """Upsert idempotente sulla chiave naturale (stato, anno), in UNA transazione.
+
+        Ogni riga ha le chiavi di `COLONNE_PRODUZIONE`. Restituisce quante righe
+        sono state inserite, aggiornate e lasciate invariate. Se una riga fallisce,
+        la transazione si annulla e non resta scritto niente.
+
+        Le righe si scrivono una alla volta perché MySQL dice, per ciascuna, cosa è
+        successo: 1 = inserita, 2 = aggiornata, 0 = identica a quella che c'era
+        (il driver non usa CLIENT_FOUND_ROWS). Con `executemany` il conteggio
+        sarebbe uno solo per tutto il blocco.
+        """
+        conteggi = {0: 0, 1: 0, 2: 0}
+        with self._db.transazione() as cursore:
+            for riga in righe:
+                cursore.execute(_UPSERT_PRODUZIONE, tuple(riga[c] for c in COLONNE_PRODUZIONE))
+                conteggi[cursore.rowcount] += 1
+        return conteggi[1], conteggi[2], conteggi[0]
 
 
 class PrevisioniRepository(_Repository):
