@@ -1,6 +1,6 @@
-"""ETL del dataset USDA: lettura del CSV e pulizia (M3-T4).
+"""ETL del dataset USDA: lettura, pulizia e caricamento (M3-T4, M3-T5).
 
-Due funzioni, ognuna con un compito solo:
+Quattro funzioni, ognuna con un compito solo:
 
 - `extract(percorso)` legge `honeyproduction.csv` e controlla che sia il file
   giusto e ben formato: esiste, ha le colonne attese, i numeri sono numeri e gli
@@ -10,29 +10,43 @@ Due funzioni, ognuna con un compito solo:
   e restituisce due tabelle: le righe pulite, con i nomi e le unità del
   database, e quelle scartate, ognuna con il proprio motivo.
 
-Entrambe sono pure: non scrivono file, non toccano il database e non modificano
-il DataFrame ricevuto. L'unico effetto è il log (`WARNING` per le chiavi
-duplicate, R9, e per le scorte superiori alla produzione, R11), che le regole
-stesse richiedono.
+- `load(puliti, database)` scrive le righe pulite in `produzione_usda` con un
+  upsert sulla chiave naturale (stato, anno), tutto in una transazione:
+  rilanciarlo non duplica nulla, un errore a metà non lascia niente di scritto;
+- `run_pipeline(percorso, database, cartella_report)` fa le tre cose in fila,
+  registra ogni passo nel log e restituisce un `ReportETL` (righe lette, scartate
+  per motivo, inserite, aggiornate, invariate, durata), salvato anche su file.
 
-Il caricamento nel database è `load()` (M3-T5).
+`extract` e `transform` sono pure: non scrivono file, non toccano il database e
+non modificano il DataFrame ricevuto. L'unico effetto è il log (`WARNING` per le
+chiavi duplicate, R9, e per le scorte superiori alla produzione, R11), che le
+regole stesse richiedono.
 
 Uso:
 
     grezzo = extract(Path("data/honeyproduction.csv"))
     puliti, scartati = transform(grezzo)
     conteggio_scarti(scartati)   # {"stato_non_valido": 2, ...}
+
+    report = run_pipeline(Path("data/honeyproduction.csv"), database, Path("reports"))
+    print(report.testo())
+
+Da riga di comando: `python scripts/run_etl.py`.
 """
 
 from __future__ import annotations
 
-from datetime import date
+import time
+from dataclasses import dataclass, field
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
 
+from beewatch.database import Database
 from beewatch.exceptions import ETLError
 from beewatch.logging_config import ottieni_logger
+from beewatch.repositories_riferimento import ProduzioneUsdaRepository
 
 logger = ottieni_logger(__name__)
 
@@ -243,3 +257,120 @@ def transform(
 def conteggio_scarti(scartati: pd.DataFrame) -> dict[str, int]:
     """Quante righe sono state scartate per ciascun motivo."""
     return {str(m): int(n) for m, n in scartati["motivo"].value_counts().sort_index().items()}
+
+
+# --------------------------------------------------------------------------- #
+# Load e pipeline
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class EsitoCaricamento:
+    inserite: int
+    aggiornate: int
+    invariate: int
+
+
+def load(puliti: pd.DataFrame, database: Database) -> EsitoCaricamento:
+    """Scrive le righe pulite in `produzione_usda`, in una sola transazione.
+
+    Prima controlla che ogni stato esista in `stati_usa` (chiave esterna): se il
+    seed non è stato caricato, un `ETLError` lo dice chiaramente invece di un
+    errore di vincolo del database.
+
+    Raises:
+        ETLError: stati mancanti in `stati_usa`.
+        DatabaseError: errore di MySQL; la transazione è annullata, niente è scritto.
+    """
+    repository = ProduzioneUsdaRepository(database)
+    mancanti = sorted(set(puliti["codice_stato"]) - repository.codici_stati())
+    if mancanti:
+        raise ETLError(
+            f"La tabella stati_usa non contiene {len(mancanti)} stati del dataset "
+            f"({', '.join(mancanti[:5])}{'...' if len(mancanti) > 5 else ''}). "
+            f"Il seed non è stato caricato: ricrea il database o applica sql/seed.sql."
+        )
+    # to_dict restituisce tipi Python (int, float, str), quelli che il driver accetta.
+    inserite, aggiornate, invariate = repository.carica(puliti.to_dict("records"))
+    return EsitoCaricamento(inserite, aggiornate, invariate)
+
+
+@dataclass(frozen=True)
+class ReportETL:
+    """Il resoconto di un'esecuzione dell'ETL."""
+
+    file: Path
+    lette: int
+    scartate_per_motivo: dict[str, int]
+    caricamento: EsitoCaricamento
+    durata_secondi: float
+    scartate: pd.DataFrame = field(repr=False, compare=False)
+
+    @property
+    def scartate_totali(self) -> int:
+        return sum(self.scartate_per_motivo.values())
+
+    def testo(self) -> str:
+        righe = [
+            "BeeWatch AI · ETL produzione USDA",
+            f"File:            {self.file}",
+            f"Righe lette:     {self.lette}",
+            f"Righe scartate:  {self.scartate_totali}",
+            *(f"  {motivo}: {n}" for motivo, n in self.scartate_per_motivo.items()),
+            f"Inserite:        {self.caricamento.inserite}",
+            f"Aggiornate:      {self.caricamento.aggiornate}",
+            f"Invariate:       {self.caricamento.invariate}",
+            f"Durata:          {self.durata_secondi:.2f} s",
+        ]
+        if not self.scartate.empty:
+            righe += ["", "Righe scartate (riga del file, stato, anno, motivo):"]
+            righe += [
+                f"  {r.riga}  {r.state}  {r.year}  {r.motivo}"
+                for r in self.scartate.itertuples(index=False)
+            ]
+        return "\n".join(righe) + "\n"
+
+
+def run_pipeline(percorso: Path, database: Database, cartella_report: Path) -> ReportETL:
+    """Extract, transform e load in fila; il report va nel log e in `cartella_report`.
+
+    Raises:
+        ETLError: problemi del file o del seed (niente è stato scritto).
+        DatabaseError: errore di MySQL durante il caricamento (niente è stato scritto).
+    """
+    inizio = time.monotonic()
+    logger.info("ETL: lettura di %s", percorso)
+    grezzo = extract(percorso)
+    logger.info("ETL: %d righe lette, applicazione delle regole R1-R12", len(grezzo))
+    puliti, scartati = transform(grezzo)
+    logger.info("ETL: %d righe pulite, %d scartate", len(puliti), len(scartati))
+    caricamento = load(puliti, database)
+    logger.info(
+        "ETL: caricamento completato (%d inserite, %d aggiornate, %d invariate)",
+        caricamento.inserite, caricamento.aggiornate, caricamento.invariate,
+    )  # fmt: skip
+
+    report = ReportETL(
+        file=percorso,
+        lette=len(grezzo),
+        scartate_per_motivo=conteggio_scarti(scartati),
+        caricamento=caricamento,
+        durata_secondi=time.monotonic() - inizio,
+        scartate=scartati,
+    )
+    destinazione = _salva_report(report, cartella_report)
+    logger.info("ETL: report salvato in %s", destinazione)
+    return report
+
+
+def _salva_report(report: ReportETL, cartella: Path) -> Path:
+    """Scrive il report in `cartella/etl_<data>_<ora>.txt` senza sovrascriverne altri."""
+    cartella.mkdir(parents=True, exist_ok=True)
+    base = f"etl_{datetime.now():%Y%m%d_%H%M%S}"
+    destinazione = cartella / f"{base}.txt"
+    progressivo = 1
+    while destinazione.exists():
+        progressivo += 1
+        destinazione = cartella / f"{base}_{progressivo}.txt"
+    destinazione.write_text(report.testo(), encoding="utf-8")
+    return destinazione
