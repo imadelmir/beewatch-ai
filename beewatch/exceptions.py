@@ -63,6 +63,16 @@ class ValidationError(BeeWatchError):
         self.campo = campo
 
 
+class ETLError(BeeWatchError):
+    """Il dataset USDA non si può caricare così com'è.
+
+    Sollevata da `beewatch.etl`: file assente o illeggibile, colonne mancanti,
+    valori non numerici o fuori dal range accettato, tabella `stati_usa` vuota
+    perché il seed non è stato caricato. Il messaggio dice cosa non va e in
+    quali righe del file, così si corregge il file invece di indovinare.
+    """
+
+
 class ModelError(BeeWatchError):
     """Il modello di machine learning è assente o non utilizzabile.
 

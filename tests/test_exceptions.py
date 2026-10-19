@@ -13,12 +13,13 @@ from beewatch.exceptions import (
     BeeWatchError,
     ConfigError,
     DatabaseError,
+    ETLError,
     LLMError,
     ModelError,
     ValidationError,
 )
 
-SOTTOCLASSI = (ConfigError, DatabaseError, ValidationError, ModelError, LLMError)
+SOTTOCLASSI = (ConfigError, DatabaseError, ValidationError, ETLError, ModelError, LLMError)
 
 
 @pytest.mark.parametrize("eccezione", SOTTOCLASSI)
