@@ -12,7 +12,6 @@ Docker; le baseline calcolate da lì sono i numeri della model card
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator
 from decimal import Decimal
 from pathlib import Path
 
@@ -21,7 +20,6 @@ import pandas as pd
 import pytest
 
 from beewatch.database import Database
-from beewatch.etl import STATI_AMMESSI, extract, load, transform
 from beewatch.exceptions import ModelError
 from beewatch.ml import train
 from beewatch.ml.train import (
@@ -253,8 +251,6 @@ def test_in_beewatch_ml_non_si_legge_mai_il_csv() -> None:
 # Integration: dataset vero, nel database di test
 # --------------------------------------------------------------------------- #
 
-DATASET = RADICE / "data" / "honeyproduction.csv"
-
 # I numeri della model card (docs/model_card.md), sul pannello Q8 dal database.
 ATTESI_Q8 = {
     MEDIA_GLOBALE: (6.655, 8.371, -0.313),
@@ -262,20 +258,6 @@ ATTESI_Q8 = {
     MEDIA_STATO_TREND: (4.168, 5.435, 0.447),
     PERSISTENZA: (4.063, 5.296, 0.474),
 }
-
-
-@pytest.fixture
-def dataset_nel_database(database_test: Database) -> Iterator[None]:
-    """Carica il dataset vero con l'ETL; alla fine toglie le righe caricate (tutte)."""
-    puliti, _ = transform(extract(DATASET), anno_corrente=2026)
-    load(puliti, database_test)
-    yield
-    segnaposto = ", ".join(["%s"] * len(STATI_AMMESSI))
-    with database_test.transazione() as cursore:
-        cursore.execute(
-            f"DELETE FROM produzione_usda WHERE codice_stato IN ({segnaposto})",
-            tuple(sorted(STATI_AMMESSI)),
-        )
 
 
 @pytest.mark.integration

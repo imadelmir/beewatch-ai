@@ -1,9 +1,9 @@
 # Model card · Previsione della resa per colonia
 
 > **Stato** in costruzione: dati, validazione e baseline (M4-T1), criterio di
-> accettazione (DA-05). Feature, modelli, metriche finali, intervallo e limiti
-> arrivano con M4-T2 … M4-T6.
-> **Codice** `beewatch/ml/train.py` · **Test** `tests/test_train.py`
+> accettazione (DA-05), feature (M4-T2). Modelli, metriche finali, intervallo e
+> limiti arrivano con M4-T3 … M4-T6.
+> **Codice** `beewatch/ml/train.py`, `beewatch/ml/features.py` · **Test** `tests/test_train.py`, `tests/test_features.py`
 
 ## Che cosa prevede
 
@@ -93,9 +93,35 @@ Motivazione e coerenza con la specifica:
 Se nessun modello batte la persistenza, questa model card lo dirà senza
 indicare un vincitore.
 
+## Feature
+
+Costruite da `costruisci_feature_storiche()` (i valori degli anni precedenti
+dello stesso stato, cercati per chiave) e trasformate da `crea_preprocessore()`,
+il `ColumnTransformer` in testa a ogni Pipeline. Ogni feature della riga
+(stato, anno *t*) usa solo ciò che si sa alla fine dell'anno *t − 1*.
+
+| Feature | Trasformazione | Perché |
+|---|---|---|
+| `codice_stato` | one-hot (stato nuovo → tutti zeri) | il livello di resa dello stato |
+| `anno` | standardizzato | la tendenza, −0,53 kg l'anno |
+| `resa_anno_prima` | mediana se manca, standardizzata | la persistenza, la baseline più forte |
+| `resa_media_3_anni_prima` | mediana se manca, standardizzata | un livello recente meno rumoroso di un anno solo |
+| `colonie_anno_prima` | `log1p`, mediana se manca, standardizzata | la scala dell'apicoltura dello stato (da 2.000 a 510.000 colonie) |
+| `senza_storia` | indicatore | 1 nel primo anno di uno stato (1998), dove le tre feature storiche sono imputate |
+
+**Escluse:** il target dell'anno; `numero_colonie` dello stesso anno (non si
+conosce alla fine dell'anno prima); `produzione_totale_kg` e
+`valore_produzione_usd` (contengono il target, R5); `scorte_kg` e
+`prezzo_per_kg_usd` (mercato, M2-T3; non sono in Q8). Il preprocessore scarta
+ogni colonna che non è una feature.
+
+Mediane, medie e scale si imparano solo dalle righe di addestramento. Sulla
+verifica 2010–2012 nessuna feature storica manca, e `resa_anno_prima` coincide
+con la previsione della persistenza. Motivazioni:
+[`M4-T2_feature_preprocessore.md`](markdown/M4-machine-learning/M4-T2_feature_preprocessore.md).
+
 ## Da completare
 
-- Feature e feature escluse per leakage (M4-T2)
 - Modelli confrontati e scelta motivata (M4-T3)
 - Cross-validation temporale (M4-T4), tuning (M4-T5)
 - Metriche finali, residui, importanza delle variabili, intervallo di

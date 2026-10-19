@@ -27,6 +27,7 @@ from docker_support import (
 from beewatch import config, logging_config
 from beewatch.config import ConfigDatabase, ottieni
 from beewatch.database import Database
+from beewatch.etl import STATI_AMMESSI, extract, load, transform
 
 # Le variabili lette da beewatch.config, più DB_ROOT_PASSWORD: la config non la
 # legge, ma i test la usano come segreto e non deve venire dal computer di chi
@@ -137,7 +138,7 @@ def stack_mysql(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
     if not docker_pronto():
         pytest.fail(
             "I test di integrazione del database richiedono Docker in esecuzione: "
-            "avvia Docker Desktop, oppure lancia solo `pytest -m \"not integration\"`.",
+            'avvia Docker Desktop, oppure lancia solo `pytest -m "not integration"`.',
             pytrace=False,
         )
     prima = fotografia_risorse_reali()
@@ -169,3 +170,18 @@ def config_db_test(stack_mysql: Stack) -> ConfigDatabase:
 def database_test(config_db_test: ConfigDatabase) -> Database:
     """Un `Database` sul database di test. È quello che useranno anche i repository."""
     return Database(config_db_test)
+
+
+@pytest.fixture
+def dataset_nel_database(database_test: Database) -> Iterator[None]:
+    """Il dataset vero caricato con l'ETL nel database di test (M4); alla fine lo toglie."""
+    dataset = Path(__file__).resolve().parents[1] / "data" / "honeyproduction.csv"
+    puliti, _ = transform(extract(dataset), anno_corrente=2026)
+    load(puliti, database_test)
+    yield
+    segnaposto = ", ".join(["%s"] * len(STATI_AMMESSI))
+    with database_test.transazione() as cursore:
+        cursore.execute(
+            f"DELETE FROM produzione_usda WHERE codice_stato IN ({segnaposto})",
+            tuple(sorted(STATI_AMMESSI)),
+        )
