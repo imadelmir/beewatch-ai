@@ -31,6 +31,11 @@ stesso archivio ci sono tre file `honeyraw_*` con i dati grezzi, che **non
 usiamo**: partire dal file tidy è una scelta deliberata, perché la nostra task
 non è ricostruire il dataset ma capirlo.
 
+Licenza **CC0 1.0** (pubblico dominio), versione 2 del 9 aprile 2018. Il file è
+nel repository, in `data/honeyproduction.csv`: provenienza verificata, SHA-256 e
+condizioni d'uso sono in [`data/README.md`](../../../data/README.md) (decisione
+DA-04, ottobre 2026: fino ad allora il file non era versionato).
+
 Ogni riga è la sintesi di **uno stato in un anno**. Non esistono righe per
 singolo apiario o per singolo alveare: è un dato aggregato, e questo è il fatto
 più importante di tutta l'analisi.

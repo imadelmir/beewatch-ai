@@ -358,6 +358,7 @@ def test_il_repository_carica_le_colonne_prodotte_da_transform() -> None:
 def _report(scartate: pd.DataFrame | None = None, **valori) -> ReportETL:
     base = {
         "file": Path("data/honey.csv"),
+        "sha256": "0" * 64,
         "lette": 5,
         "scartate_per_motivo": {"stato_non_valido": 1},
         "caricamento": EsitoCaricamento(inserite=3, aggiornate=1, invariate=0),
