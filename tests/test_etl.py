@@ -544,3 +544,103 @@ def test_integrazione_la_cli_popola_il_database_e_stampa_il_report(
     assert config_db_test.password not in uscita.out + uscita.err
     assert set(_nel_database(database_test)) == {("AL", 1998), ("WY", 2012)}
     assert len(list(tmp_path.glob("etl_*.txt"))) == 1
+
+
+# =========================================================================== #
+# CSV mini in tests/fixtures (M3-T6)
+# =========================================================================== #
+# `honey_mini.csv`: 3 stati x 5 anni (2008-2012) con valori SINTETICI, non USDA,
+# ma coerenti (produzione = colonie x resa), più due righe invalide: Porto Rico
+# (R7) e una riga senza scorte (R2). AL 2010 ha scorte superiori alla produzione
+# (R11). Il CSV vero non è nel repository (DA-04).
+
+CSV_MINI = Path(__file__).resolve().parent / "fixtures" / "honey_mini.csv"
+
+
+def test_csv_mini_quindici_righe_pulite_e_due_scartate(caplog) -> None:
+    caplog.set_level(logging.WARNING, logger="beewatch.etl")
+
+    grezzo = extract(CSV_MINI)
+    puliti, scartati = transform(grezzo, anno_corrente=2026)
+
+    assert len(grezzo) == 17
+    assert len(puliti) == 15
+    assert puliti.groupby("codice_stato")["anno"].apply(list).to_dict() == {
+        stato: [2008, 2009, 2010, 2011, 2012] for stato in ("AL", "CA", "ND")
+    }
+    assert conteggio_scarti(scartati) == {"campo_obbligatorio_mancante": 1, "stato_non_valido": 1}
+    assert list(scartati["riga"]) == [17, 18]
+    assert "Scorte superiori alla produzione: AL 2010" in caplog.text
+    assert not puliti.isna().any().any()
+
+
+def test_csv_mini_coerente_produzione_uguale_a_colonie_per_resa() -> None:
+    """Il controllo di coerenza di dati.md, ripetuto sulle righe pulite (in kg)."""
+    puliti, _ = transform(extract(CSV_MINI), anno_corrente=2026)
+    attesa = puliti["numero_colonie"] * puliti["resa_per_colonia_kg"]
+    assert (attesa - puliti["produzione_totale_kg"]).abs().max() < 1e-6
+
+
+def test_solo_intestazione_nessuna_riga_nessun_errore(scrivi_csv) -> None:
+    puliti, scartati = transform(extract(scrivi_csv()), anno_corrente=2026)
+    assert puliti.empty and scartati.empty
+    assert list(puliti.columns) == list(COLONNE_PULITE)
+    assert conteggio_scarti(scartati) == {}
+
+
+@pytest.fixture
+def produzione_mini_pulita(database_test) -> Iterator[None]:
+    def _pulisci() -> None:
+        with database_test.transazione() as cursore:
+            cursore.execute("DELETE FROM produzione_usda WHERE codice_stato IN ('AL', 'CA', 'ND')")
+
+    _pulisci()
+    yield
+    _pulisci()
+
+
+def _righe_mini(database_test) -> list[dict]:
+    with database_test.transazione() as cursore:
+        cursore.execute(
+            "SELECT * FROM produzione_usda WHERE codice_stato IN ('AL', 'CA', 'ND') "
+            "ORDER BY codice_stato, anno"
+        )
+        return cursore.fetchall()
+
+
+@pytest.mark.integration
+def test_integrazione_csv_mini_idempotenza(database_test, produzione_mini_pulita, tmp_path) -> None:
+    """DoD M3-T6: due esecuzioni, stesse righe, stessi valori, stessi id."""
+    primo = run_pipeline(CSV_MINI, database_test, tmp_path)
+    dopo_il_primo = _righe_mini(database_test)
+    secondo = run_pipeline(CSV_MINI, database_test, tmp_path)
+    dopo_il_secondo = _righe_mini(database_test)
+
+    assert primo.caricamento == EsitoCaricamento(inserite=15, aggiornate=0, invariate=0)
+    assert secondo.caricamento == EsitoCaricamento(inserite=0, aggiornate=0, invariate=15)
+    assert len(dopo_il_primo) == 15
+    assert dopo_il_secondo == dopo_il_primo  # nemmeno un valore o un id è cambiato
+
+
+@pytest.mark.integration
+def test_integrazione_csv_mini_rollback_se_una_riga_fallisce(
+    database_test, produzione_mini_pulita
+) -> None:
+    puliti, _ = transform(extract(CSV_MINI), anno_corrente=2026)
+    load(puliti.iloc[:5], database_test)  # AL già caricato
+    prima = _righe_mini(database_test)
+
+    rotti = puliti.copy()
+    rotti.loc[0, "numero_colonie"] = 9999  # aggiornerebbe AL 2008...
+    rotti.loc[14, "prezzo_per_kg_usd"] = 99999.0  # ...ma l'ultima riga sfora DECIMAL(8,4)
+
+    with pytest.raises(DatabaseError):
+        load(rotti, database_test)
+
+    assert _righe_mini(database_test) == prima  # né l'aggiornamento né le righe nuove
+
+
+@pytest.mark.integration
+def test_integrazione_caricare_zero_righe_non_scrive_nulla(database_test) -> None:
+    vuoto = pd.DataFrame({c: [] for c in COLONNE_PULITE})
+    assert load(vuoto, database_test) == EsitoCaricamento(0, 0, 0)
