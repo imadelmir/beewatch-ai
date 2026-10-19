@@ -35,6 +35,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | M3-T3 | [Repository](markdown/M3-etl/M3-T3_repository.md) | tutto l'SQL del progetto, query Q1–Q11, isolamento fra utenti |
 | M3-T4 | [ETL: extract e transform](markdown/M3-etl/M3-T4_etl_extract_transform.md) | lettura del CSV USDA, regole R1–R12, scarti con motivo |
 | M3-T5 | [ETL: load, report e CLI](markdown/M3-etl/M3-T5_etl_load_report_cli.md) | caricamento idempotente in una transazione, report, `scripts/run_etl.py` |
+| M3-T6 | [Test del livello dati](markdown/M3-etl/M3-T6_test_livello_dati.md) | CSV mini, idempotenza e rollback, test MySQL in CI |
 
 ### M6 · Interfaccia Streamlit
 
