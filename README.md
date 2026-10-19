@@ -24,15 +24,16 @@ conversazionale che può girare interamente sul tuo computer.
 
 ## In breve
 
-> **Progetto in corso.** Fondamenta e livello dati sono chiusi; ETL, modello di
-> previsione e interfaccia Streamlit sono ancora da costruire. Quello che segue
+> **Progetto in corso.** Fondamenta, livello dati e accesso ai dati con l'ETL
+> sono chiusi; modello di previsione, assistente AI e interfaccia Streamlit sono
+> ancora da costruire. Quello che segue
 > descrive il progetto completo, e la tabella di marcia dice a che punto e.
 
 | | |
 |---|---|
 | **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
-| **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza |
-| **Risultato finora** | 2 milestone su 8 chiuse, 33 test automatici, CI verde |
+| **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza, accesso ai dati (transazioni, repository) ed ETL del dataset USDA |
+| **Risultato finora** | 3 milestone su 8 chiuse, 491 test automatici (406 rapidi + 85 con MySQL in Docker), CI verde |
 | **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
 | **Demo** | Non ancora: l'interfaccia e la milestone M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
 | **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
@@ -121,6 +122,12 @@ da ridistribuire.
 
 1. scaricalo da [Kaggle — Honey Production in the USA](https://www.kaggle.com/datasets/jessicali9530/honey-production)
 2. metti `honeyproduction.csv` nella cartella `data/`
+3. avvia MySQL e carica il dataset (si può rilanciare: non duplica nulla)
+
+```bash
+docker compose up -d mysql
+python scripts/run_etl.py
+```
 
 Come è fatto, cosa dice e cosa non può dire: [`docs/markdown/M2-dati/dati.md`](docs/markdown/M2-dati/dati.md).
 
@@ -147,13 +154,19 @@ logica resterebbe intatta.
 ## Sviluppo
 
 ```bash
-pytest                      # la suite di test
-ruff check .                # lint e ordine degli import
-ruff check . --fix          # correzione automatica di ciò che è correggibile
+pytest -m "not integration"   # suite rapida, senza Docker (è quella del controllo obbligatorio)
+pytest -m integration         # test con MySQL vero: richiede Docker in esecuzione
+ruff check .                  # lint e ordine degli import
+ruff check . --fix            # correzione automatica di ciò che è correggibile
 ```
 
+I test `integration` avviano da soli uno stack Docker temporaneo e lo smontano
+alla fine: il database di sviluppo non viene mai toccato. `pytest` senza
+opzioni li esegue tutti, quindi senza Docker va in errore.
+
 Ogni pull request installa il progetto **su una macchina pulita** ed esegue lint
-e test: se il controllo `Lint e test` è rosso, il merge è bloccato. È anche la
+e test rapidi: se il controllo `Lint e test` è rosso, il merge è bloccato. Un
+secondo job esegue i test `integration` con MySQL in Docker. È anche la
 sola prova che il progetto si installa davvero da zero — sul computer di chi
 sviluppa funziona sempre.
 
@@ -178,7 +191,7 @@ milestone. L'indice è in [`docs/README.md`](docs/README.md).
 |---|---|---|
 | **M1** | Fondamenta e setup | ✅ completata |
 | **M2** | Dati e database | ✅ completata |
-| M3 | Accesso ai dati ed ETL | ⬜ |
+| **M3** | Accesso ai dati ed ETL | ✅ completata |
 | M4 | Machine Learning | ⬜ |
 | M5 | Componente AI generativa | ⬜ |
 | M6 | Interfaccia Streamlit | ⬜ |
