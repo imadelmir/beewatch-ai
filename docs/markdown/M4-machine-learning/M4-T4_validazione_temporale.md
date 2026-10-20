@@ -2,7 +2,7 @@
 
 > **Milestone** M4 · Machine Learning
 > **Task** M4-T4
-> **Stato** completata nel codice e nei documenti; manca la verifica umana della DoD (vedi sotto)
+> **Stato** completata; verifica umana della DoD fatta da DEV-2 (issue #21)
 > **Commit** `feat(m4): add yearly expanding-window cross-validation`
 > **Collegati** → [`model_card.md`](../../model_card.md#validazione-temporale-m4-t4) · [`M4-T3_confronto_modelli.md`](M4-T3_confronto_modelli.md) · [`DA-05_criterio_di_accettazione.md`](DA-05_criterio_di_accettazione.md)
 
@@ -110,10 +110,10 @@ M4-T5 e non è stato fatto qui.
 | strategia scritta e motivata in `docs/model_card.md` | sezione *Validazione temporale · Strategia* |
 | spiegato PERCHÉ non si usa uno split casuale | stessa sezione, *Perché non uno split casuale* (e perché non `TimeSeriesSplit`) |
 | risultati CV con media e deviazione standard | tabelle per fold e *Media e deviazione standard sui tre fold*; `test_media_e_deviazione_standard_campionaria_dei_fold`, `test_integrazione_la_cross_validation_della_model_card` |
-| verificato da una seconda persona che non ci sia informazione futura | **da fare**: è un passo umano. La model card elenca cosa controllare; i test di leakage lo preparano ma non lo sostituiscono |
+| verificato da una seconda persona che non ci sia informazione futura | fatto: esito positivo di DEV-2 sul commit `a4404fd`, punti 1–5 (issue #21) |
 
 ## Miglioramenti futuri
 
-- Tuning (M4-T5) con `fold_temporali`, senza guardare il 2010–2012.
+- Tuning (M4-T5) con `fold_temporali`, senza guardare il 2010–2012: fatto, vedi `M4-T5_tuning.md`.
 - Considerare, in M4-T6, di presentare accanto alla random forest la baseline con
   la tendenza, visto che nella cross-validation sono alla pari.

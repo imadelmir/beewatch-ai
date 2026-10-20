@@ -2,9 +2,9 @@
 
 > **Stato** in costruzione: dati, validazione e baseline (M4-T1), criterio di
 > accettazione (DA-05), feature (M4-T2), confronto fra modelli (M4-T3),
-> cross-validation temporale (M4-T4). Tuning, metriche finali, intervallo e
-> limiti arrivano con M4-T5 e M4-T6.
-> **Codice** `beewatch/ml/train.py`, `beewatch/ml/features.py`, `beewatch/ml/validazione.py` · **Notebook** `notebooks/02_modelli.ipynb` · **Test** `tests/test_train.py`, `tests/test_features.py`, `tests/test_confronto_modelli.py`, `tests/test_validazione.py`
+> cross-validation temporale (M4-T4), tuning (M4-T5). Metriche finali,
+> intervallo e limiti arrivano con M4-T6.
+> **Codice** `beewatch/ml/train.py`, `beewatch/ml/features.py`, `beewatch/ml/validazione.py`, `beewatch/ml/tuning.py` · **Notebook** `notebooks/02_modelli.ipynb` · **Test** `tests/test_train.py`, `tests/test_features.py`, `tests/test_confronto_modelli.py`, `tests/test_validazione.py`, `tests/test_tuning.py`
 
 ## Che cosa prevede
 
@@ -320,7 +320,9 @@ sostituisce, dice quanto quel risultato è stabile.
 ### Verifica da parte di una seconda persona
 
 La DoD chiede che una seconda persona controlli che non ci sia informazione dal
-futuro. È un passo umano, **non ancora fatto**. Cosa controllare:
+futuro. **Fatta, esito positivo**: revisore DEV-2, sul codice di `main` al commit
+`a4404fd`, punti 1–5 compresa l'ipotesi delle previsioni sequenziali a un anno
+(issue #21). I punti controllati:
 
 - in `confronta_modelli` (`train.py`) il target è tolto dagli ingressi e il
   preprocessore è adattato con `fit` solo sull'addestramento;
@@ -334,8 +336,89 @@ futuro. È un passo umano, **non ancora fatto**. Cosa controllare:
 
 Dettagli: [`M4-T4_validazione_temporale.md`](markdown/M4-machine-learning/M4-T4_validazione_temporale.md).
 
-## Da completare
+## Tuning (M4-T5)
 
-- Tuning (M4-T5), con i fold di `fold_temporali()`
+### Griglia e procedura
+
+`ottimizza_random_forest()` in `beewatch/ml/tuning.py`: un `GridSearchCV` sulla
+Pipeline della random forest (stesso preprocessore, seed 42), con
+`scoring="neg_mean_absolute_error"` (il MAE è la metrica di DA-05) e come `cv` i
+tre fold per anno di M4-T4 (`fold_temporali`). Il dataset viene ristretto agli
+anni **fino al 2009 prima** di costruire feature e indici: il 2010–2012 non entra
+nella ricerca né in questa task.
+
+| Iperparametro | Valori | Perché |
+|---|---|---|
+| `n_estimators` | 200, 500 | più alberi riducono la varianza della media; oltre qualche centinaio il guadagno è trascurabile |
+| `max_depth` | None, 8, 15 | alberi interi o limitati: con 240–400 righe di addestramento per fold il rischio è imparare il rumore |
+| `min_samples_leaf` | 1, 3, 5 | foglie più grandi fanno medie su più righe: previsioni più lisce, meno sovradattamento |
+
+18 configurazioni × 3 fold. La griglia è quella del backlog; nessun valore è stato
+aggiunto dopo aver visto i risultati.
+
+**Regole fissate prima della ricerca:**
+
+- si sceglie la configurazione con il MAE medio più basso sui tre fold;
+- default e configurazione scelta si rivalutano con `cross_validation_temporale`:
+  stessi fold, stesse righe, stessa `metriche()`;
+- la scelta si adotta solo se ha un MAE medio più basso dei default **e** migliora
+  in almeno due fold su tre (`EsitoTuning.da_adottare`); altrimenti restano i
+  default.
+
+### Risultati
+
+Configurazione scelta: **`n_estimators=200`, `max_depth=None`,
+`min_samples_leaf=5`**. Le sei configurazioni migliori hanno tutte
+`min_samples_leaf=5`; la profondità cambia poco (4,0883 / 4,0885 / 4,0922 con
+200 alberi).
+
+MAE per fold, kg per colonia:
+
+| | 2004–05 | 2006–07 | 2008–09 | Media ± std |
+|---|---|---|---|---|
+| Random forest, default | 4,1389 | 4,1783 | 4,0962 | 4,1378 ± 0,0410 |
+| Random forest, ottimizzata | 4,1365 | 3,9563 | 4,1723 | 4,0883 ± 0,1158 |
+| Differenza (ottimizzata − default) | −0,0024 | −0,2220 | +0,0760 | −0,0495 |
+
+Media ± deviazione standard sui tre fold:
+
+| | MAE | RMSE | R² |
+|---|---|---|---|
+| Random forest, default | 4,1378 ± 0,0410 | **5,2610** ± 0,2604 | **0,5787** ± 0,0330 |
+| Random forest, ottimizzata | **4,0883** ± 0,1158 | 5,3225 ± 0,3015 | 0,5685 ± 0,0421 |
+| Media dello stato + tendenza | 4,1006 ± 0,3170 | 5,3544 ± 0,2574 | 0,5559 ± 0,1022 |
+| Persistenza | 4,7797 ± 0,4592 | 6,1067 ± 0,4261 | 0,4333 ± 0,0432 |
+
+(La colonna «mae_dev_std» di `GridSearchCV` usa la deviazione standard con n,
+0,0945 per la scelta; qui è con n − 1, come in M4-T4.)
+
+### Il miglioramento, detto onestamente
+
+**Il tuning migliora il MAE medio di 0,049 kg (1,2 %), e niente di più.**
+
+- La regola di adozione è soddisfatta, ma di poco: dei due fold migliorati uno
+  lo è per 0,002 kg, cioè alla pari; nel 2008–09 l'ottimizzata peggiora di 0,076.
+- RMSE e R² medi **peggiorano**, e la variabilità fra fold quasi triplica (0,041 →
+  0,116). Foglie più grandi rendono le previsioni più lisce: l'errore tipico cala
+  un poco, gli errori grandi probabilmente crescono (nel 2008–09 il RMSE passa da
+  5,04 a 5,43).
+- La configurazione è la migliore di 18 **sugli stessi fold** su cui è misurata:
+  il 4,0883 è ottimista. Con tre fold una cross-validation annidata non darebbe
+  stime affidabili, e non è stata fatta.
+- Rispetto alla baseline «media dello stato + tendenza» (4,1006) l'ottimizzata è
+  sotto di 0,012 kg: è ancora alla pari, non un vantaggio.
+
+**Decisione.** Per la regola fissata prima, la configurazione ottimizzata
+(`n_estimators=200`, `min_samples_leaf=5`) diventa quella della valutazione
+finale (M4-T6) e del salvataggio (M4-T7). Il guadagno resta nell'ordine del
+rumore: tornare ai default sarebbe altrettanto difendibile.
+
+**Cosa il tuning non dice.** Non è stato misurato sul 2010–2012, che resta fuori
+da M4-T5. Questo non rende quel pannello una verifica indipendente: è già stato
+usato per scegliere il modello in M4-T3.
+
+Dettagli: [`M4-T5_tuning.md`](markdown/M4-machine-learning/M4-T5_tuning.md).
+
+## Da completare
 - Metriche finali, residui, importanza delle variabili, intervallo di
   previsione, limiti, quando non usarlo (M4-T6)

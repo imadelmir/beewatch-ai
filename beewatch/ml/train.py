@@ -39,6 +39,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
@@ -281,12 +282,17 @@ def confronta_modelli(
     dati: pd.DataFrame,
     seed: int = SEED,
     ultimo_anno_addestramento: int = ULTIMO_ANNO_ADDESTRAMENTO,
+    modelli: dict[str, Pipeline] | None = None,
 ) -> Confronto:
     """Addestra i modelli sull'addestramento e prevede con loro e con le baseline la verifica.
 
     Le feature di ogni riga usano solo gli anni precedenti (M4-T2): per il 2011 la
     resa vera del 2010, come la persistenza. Il target non entra mai fra gli
     ingressi dei modelli, neanche nelle righe di addestramento.
+
+    `modelli` sostituisce i tre di `crea_modelli(seed)` (M4-T5 confronta così la
+    random forest di default con quella ottimizzata); ognuno viene clonato, quindi
+    non resta addestrato.
 
     Raises:
         ModelError: indice di `dati` non univoco, split vuoto, baseline non calcolabile.
@@ -296,7 +302,10 @@ def confronta_modelli(
     addestramento, verifica = dividi_temporale(dati, ultimo_anno_addestramento)
     ingressi = costruisci_feature_storiche(dati).drop(columns=[TARGET])
 
-    modelli = crea_modelli(seed)
+    if modelli is None:
+        modelli = crea_modelli(seed)
+    else:
+        modelli = {nome: clone(modello) for nome, modello in modelli.items()}
     previsioni: dict[str, np.ndarray] = {}
     for nome, modello in modelli.items():
         modello.fit(ingressi.loc[addestramento.index], addestramento[TARGET])
