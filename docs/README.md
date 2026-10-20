@@ -47,6 +47,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | M4-T2 | [Feature e preprocessore](markdown/M4-machine-learning/M4-T2_feature_preprocessore.md) | storia per stato senza dati dal futuro, `ColumnTransformer`, feature escluse |
 | M4-T3 | [Confronto fra modelli](markdown/M4-machine-learning/M4-T3_confronto_modelli.md) | tre Pipeline e quattro baseline sulle stesse 120 righe, criterio DA-05, scelta motivata · [notebook](../notebooks/02_modelli.ipynb) |
 | M4-T4 | [Validazione temporale](markdown/M4-machine-learning/M4-T4_validazione_temporale.md) | cross-validation a finestra espandente per anno (2004–2009), perché niente split casuale, media ± std, limiti |
+| M4-T5 | [Tuning](markdown/M4-machine-learning/M4-T5_tuning.md) | griglia del backlog sui fold temporali, hold-out escluso, default contro ottimizzata, guadagno marginale dichiarato |
 
 ### M6 · Interfaccia Streamlit
 

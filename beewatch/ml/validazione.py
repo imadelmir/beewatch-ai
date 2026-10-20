@@ -29,6 +29,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from sklearn.pipeline import Pipeline
 
 from beewatch.exceptions import ModelError
 from beewatch.ml.train import (
@@ -143,8 +144,11 @@ def cross_validation_temporale(
     seed: int = SEED,
     fold: tuple[Fold, ...] = FOLD_TEMPORALI,
     ultimo_anno_addestramento: int = ULTIMO_ANNO_ADDESTRAMENTO,
+    modelli: dict[str, Pipeline] | None = None,
 ) -> CrossValidazione:
     """Il confronto di M4-T3 ripetuto su ogni fold, con i dati fino alla sua valutazione.
+
+    `modelli`, se dato, sostituisce i tre di M4-T3 (vedi `confronta_modelli`).
 
     Raises:
         ModelError: fold non validi (vedi `fold_temporali`), meno di due fold, o un
@@ -158,6 +162,7 @@ def cross_validation_temporale(
             dati[dati["anno"] <= f.anni_valutazione[-1]],
             seed=seed,
             ultimo_anno_addestramento=f.fine_addestramento,
+            modelli=modelli,
         )
         for f in fold
     )
