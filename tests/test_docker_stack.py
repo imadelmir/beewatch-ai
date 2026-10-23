@@ -183,6 +183,32 @@ def test_da04_letl_nel_contenitore_carica_il_dataset_e_si_puo_rilanciare(
 
 
 # --------------------------------------------------------------------------- #
+# M4-T7 · il modello è nell'immagine e si carica dentro il contenitore
+# --------------------------------------------------------------------------- #
+
+
+def test_m4_t7_il_modello_nel_contenitore_si_carica_e_prevede_come_sul_computer(
+    stack_custom: Stack,
+) -> None:
+    """Addestrato con un altro Python (e un'altra patch di scikit-learn), qui si ricarica uguale."""
+    script = (
+        "import pandas as pd\n"
+        "from beewatch.ml.predictor import Predittore\n"
+        "p = Predittore()\n"
+        "riga = {'codice_stato': 'CA', 'anno': 2013, 'resa_anno_prima': 20.0,\n"
+        "        'resa_media_3_anni_prima': 22.0, 'colonie_anno_prima': 300000.0}\n"
+        "print(p.versione, repr(float(p.prevedi(pd.DataFrame([riga]))[0])))\n"
+    )
+
+    uscita = stack_custom.nel_container("app", "python", "-c", script)
+
+    assert uscita.returncode == 0, stack_custom.redigi(uscita.stdout + uscita.stderr)
+    versione, valore = uscita.stdout.split()
+    assert versione == "v1.0.0"
+    assert float(valore) == pytest.approx(21.36016165723675, abs=1e-6)  # come sul computer
+
+
+# --------------------------------------------------------------------------- #
 # B-14 · docker compose up avvia tutto
 # --------------------------------------------------------------------------- #
 

@@ -8,12 +8,14 @@ dove il dato è di un utente, un metodo una transazione.
 - `UtentiRepository`: la cancellazione di un utente e di tutti i suoi dati (Q11);
 - `ProduzioneUsdaRepository`: la serie storica USDA (Q7), il pannello di
   addestramento (Q8), i codici di `stati_usa` e il caricamento dell'ETL;
+- `ModelliRepository`: i modelli addestrati, di cui uno solo attivo (M4-T7);
 - `PrevisioniRepository`: salvataggio e storico delle stime (Q9);
 - `ConversazioniRepository`: lettura di una conversazione (Q10).
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 
 from beewatch.models import Previsione
@@ -109,6 +111,54 @@ class ProduzioneUsdaRepository(_Repository):
                 cursore.execute(_UPSERT_PRODUZIONE, tuple(riga[c] for c in COLONNE_PRODUZIONE))
                 conteggi[cursore.rowcount] += 1
         return conteggi[1], conteggi[2], conteggi[0]
+
+
+# Le colonne di `modelli` che scrive `ModelliRepository.registra` (la riga viene dai metadati
+# del modello: `beewatch.ml.artefatto.riga_tabella_modelli`).
+COLONNE_MODELLI = (
+    "versione", "algoritmo", "addestrato_il", "righe_addestramento", "variabili_usate",
+    "importanza_variabili", "mae_kg", "rmse_kg", "r2", "percorso_file", "attivo", "note",
+)  # fmt: skip
+_JSON_MODELLI = ("variabili_usate", "importanza_variabili")
+_UPSERT_MODELLO = (
+    f"INSERT INTO modelli ({', '.join(COLONNE_MODELLI)}) "
+    f"VALUES ({', '.join(['%s'] * len(COLONNE_MODELLI))}) AS nuovo "
+    "ON DUPLICATE KEY UPDATE "
+    + ", ".join(f"{c} = nuovo.{c}" for c in COLONNE_MODELLI if c != "versione")
+)
+
+
+def _modello(riga: Riga) -> Riga:
+    """Una riga di `modelli` con le colonne JSON decodificate e `attivo` booleano."""
+    decodificate = {
+        c: json.loads(riga[c]) for c in _JSON_MODELLI if isinstance(riga[c], str | bytes)
+    }
+    return {**riga, **decodificate, "attivo": bool(riga["attivo"])}
+
+
+class ModelliRepository(_Repository):
+    def registra(self, modello: Riga) -> None:
+        """Inserisce o aggiorna una versione e la rende l'unica attiva, in UNA transazione.
+
+        `modello` ha le chiavi di `COLONNE_MODELLI`; le colonne JSON sono già testo JSON.
+        Un solo modello alla volta può essere attivo (lo garantisce un indice univoco): per
+        questo le altre versioni si disattivano prima di attivare questa.
+        """
+        with self._db.transazione() as cursore:
+            cursore.execute(
+                "UPDATE modelli SET attivo = FALSE WHERE versione <> %s AND attivo",
+                (modello["versione"],),
+            )
+            cursore.execute(_UPSERT_MODELLO, tuple(modello[c] for c in COLONNE_MODELLI))
+
+    def trova(self, versione: str) -> Riga | None:
+        righe = self._righe("SELECT * FROM modelli WHERE versione = %s", (versione,))
+        return _modello(righe[0]) if righe else None
+
+    def attivo(self) -> Riga | None:
+        """Il modello attivo, se c'è."""
+        righe = self._righe("SELECT * FROM modelli WHERE attivo")
+        return _modello(righe[0]) if righe else None
 
 
 class PrevisioniRepository(_Repository):

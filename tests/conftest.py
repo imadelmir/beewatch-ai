@@ -185,3 +185,58 @@ def dataset_nel_database(database_test: Database) -> Iterator[None]:
             f"DELETE FROM produzione_usda WHERE codice_stato IN ({segnaposto})",
             tuple(sorted(STATI_AMMESSI)),
         )
+
+
+# --------------------------------------------------------------------------- #
+# Un modello vero ma piccolo, salvato come in produzione (M4-T7)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(scope="session")
+def artefatto_sintetico(tmp_path_factory: pytest.TempPathFactory):
+    """Pipeline addestrata su un pannello sintetico e salvata con i suoi metadati.
+
+    Restituisce un oggetto con `percorso` (il .joblib), `metadati` (quelli scritti nel .json),
+    `modello` (la Pipeline in memoria) e `dati` (il pannello). Non si modifica: i test che
+    devono rovinarlo ne copiano i file (`copia_artefatto`).
+    """
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    import numpy as np
+    import pandas as pd
+
+    from beewatch.ml.addestramento import addestra_modello_finale, crea_metadati
+    from beewatch.ml.artefatto import scrivi_artefatto
+    from beewatch.ml.features import TARGET
+    from beewatch.ml.valutazione import valuta_finale
+
+    caso = np.random.default_rng(0)
+    dati = pd.DataFrame(
+        [
+            {"codice_stato": s, "anno": a, "numero_colonie": 1000 * (i + 1) + a,
+             TARGET: 30 + 5 * i - 0.5 * (a - 1998) + caso.normal(0, 3)}
+            for i, s in enumerate(("AA", "BB", "CC", "DD", "EE", "FF"))
+            for a in range(1998, 2013)
+        ]
+    )  # fmt: skip
+    valutazione = valuta_finale(dati, ripetizioni_importanza=2)
+    momento = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    metadati = crea_metadati(dati, valutazione, versione="v0.0.1-prova", addestrato_il=momento)
+    modello = addestra_modello_finale(dati)
+    percorso = tmp_path_factory.mktemp("artefatto") / "prova.joblib"
+    completi = scrivi_artefatto(modello, metadati, percorso)
+    return SimpleNamespace(percorso=percorso, metadati=completi, modello=modello, dati=dati)
+
+
+@pytest.fixture
+def copia_artefatto(artefatto_sintetico, tmp_path: Path) -> Path:
+    """Una copia dei due file dell'artefatto, che il test può rovinare."""
+    import shutil
+
+    from beewatch.ml.artefatto import percorso_metadati
+
+    destinazione = tmp_path / "copia.joblib"
+    shutil.copy(artefatto_sintetico.percorso, destinazione)
+    shutil.copy(percorso_metadati(artefatto_sintetico.percorso), percorso_metadati(destinazione))
+    return destinazione

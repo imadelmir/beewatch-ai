@@ -15,7 +15,9 @@
 streamlit>=1.40
 pandas>=2.2
 numpy>=1.26
-scikit-learn>=1.5
+# Bloccato alla serie 1.9: models/produzione_v1.joblib e' un pickle di scikit-learn e va
+# riaddestrato (python scripts/train_model.py) quando si passa a un'altra serie (M4-T7).
+scikit-learn>=1.9,<1.10
 joblib>=1.4
 mysql-connector-python>=9.0
 python-dotenv>=1.0
