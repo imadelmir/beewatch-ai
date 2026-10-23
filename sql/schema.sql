@@ -320,7 +320,7 @@ CREATE TABLE IF NOT EXISTS modelli (
     righe_addestramento  INT UNSIGNED     NOT NULL,
     variabili_usate      JSON             NOT NULL COMMENT 'Es. ["codice_stato", "anno"]',
     importanza_variabili JSON             NULL     COMMENT 'Spiegabilita'': peso di ogni variabile',
-    mae_kg               DECIMAL(6, 3)    NOT NULL COMMENT 'Soglia da battere: 4,250 (M2-T3)',
+    mae_kg               DECIMAL(6, 3)    NOT NULL COMMENT 'Criterio DA-05: deve stare sotto il MAE della persistenza',
     rmse_kg              DECIMAL(6, 3)    NOT NULL,
     r2                   DECIMAL(5, 4)    NOT NULL,
     percorso_file        VARCHAR(255)     NOT NULL COMMENT 'Il .joblib in models/',

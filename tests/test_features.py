@@ -209,6 +209,42 @@ def test_le_colonne_escluse_non_entrano_nel_modello() -> None:
     np.testing.assert_array_equal(preprocessore.transform(dati), preprocessore.transform(alterato))
 
 
+def test_le_colonie_sono_in_logaritmo_con_la_mediana_dei_log_al_posto_dei_mancanti() -> None:
+    """Il valore della trasformazione, calcolato a mano con numpy: log1p, mediana, scala."""
+    dati = pd.DataFrame(
+        {
+            "codice_stato": "AA",
+            "anno": [2000, 2001, 2002, 2003],
+            "numero_colonie": [2_000, 20_000, 200_000, 2_000_000],  # lontane: il logaritmo conta
+            TARGET: [10.0, 20.0, 30.0, 40.0],
+        }
+    )
+    preprocessore = addestrato_su(dati)
+
+    matrice = preprocessore.transform(costruisci_feature_storiche(dati))
+
+    colonie_anno_prima = np.log1p(np.array([np.nan, 2_000, 20_000, 200_000]))
+    log = np.where(
+        np.isnan(colonie_anno_prima), np.nanmedian(colonie_anno_prima), colonie_anno_prima
+    )
+    attese = (log - log.mean()) / log.std()  # StandardScaler: deviazione standard di popolazione
+    posizione = list(preprocessore.get_feature_names_out()).index(f"colonie__{COLONIE_ANNO_PRIMA}")
+    np.testing.assert_allclose(matrice[:, posizione], attese)
+
+
+def test_senza_storia_resta_una_colonna_anche_se_laddestramento_ha_sempre_la_storia() -> None:
+    """Il numero di colonne non dipende dai mancanti visti in addestramento."""
+    feature = costruisci_feature_storiche(
+        pannello({"AA": {2000: 10, 2001: 20, 2002: 30, 2003: 40}})
+    )
+    preprocessore = crea_preprocessore().fit(feature[feature["anno"] > 2000])  # nessun mancante
+
+    matrice = preprocessore.transform(feature)  # ma qui il 2000 non ha storia
+
+    nome = f"senza_storia__missingindicator_{RESA_ANNO_PRIMA}"
+    assert list(matrice[:, list(preprocessore.get_feature_names_out()).index(nome)]) == [1, 0, 0, 0]
+
+
 def test_uno_stato_mai_visto_non_e_un_errore() -> None:
     preprocessore = addestrato_su(pannello({"AA": {2000: 10, 2001: 20}}))
     nuovo = costruisci_feature_storiche(pannello({"ZZ": {2000: 30, 2001: 31}}))
