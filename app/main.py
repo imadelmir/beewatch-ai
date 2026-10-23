@@ -15,7 +15,7 @@ Avvio in locale:
 
 Avvio nel contenitore:
 
-    docker compose --profile app up -d
+    docker compose up -d
 """
 
 from __future__ import annotations
@@ -65,6 +65,6 @@ st.info(
 
 st.divider()
 st.caption(
-    "Prossimo passo: M3 — connessione al database e ETL. "
-    "Poi M6, dove questa pagina diventa la Dashboard."
+    "Prossimo passo: M6 — questa pagina viene sostituita dall'interfaccia vera "
+    "(Home e le sei pagine)."
 )

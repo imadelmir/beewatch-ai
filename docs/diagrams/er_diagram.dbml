@@ -241,7 +241,7 @@ Table modelli [headercolor: #3FB463] {
   righe_addestramento   int          [not null]
   variabili_usate       json         [not null, note: 'Es. ["codice_stato", "anno"]']
   importanza_variabili  json         [note: 'Spiegabilita\': peso di ogni variabile']
-  mae_kg                decimal(6,3) [not null, note: 'Soglia da battere: 4,250 (M2-T3)']
+  mae_kg                decimal(6,3) [not null, note: 'Criterio DA-05: deve stare sotto il MAE della persistenza']
   rmse_kg               decimal(6,3) [not null]
   r2                    decimal(5,4) [not null]
   percorso_file         varchar(255) [not null, note: 'Il .joblib salvato in models/']
