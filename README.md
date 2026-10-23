@@ -33,7 +33,7 @@ conversazionale che può girare interamente sul tuo computer.
 |---|---|
 | **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
 | **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza, accesso ai dati (transazioni, repository) ed ETL del dataset USDA |
-| **Risultato finora** | 3 milestone su 8 chiuse, 756 test automatici (639 rapidi + 117 con MySQL in Docker), CI verde |
+| **Risultato finora** | 3 milestone su 8 chiuse, 815 test automatici (698 rapidi + 117 con MySQL in Docker), CI verde |
 | **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
 | **Demo** | Non ancora: l'interfaccia e la milestone M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
 | **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
@@ -149,6 +149,17 @@ python scripts/train_model.py
 
 Stessi dati, stesso seme e stesse librerie danno le stesse previsioni. Cosa sa fare, quanto
 sbaglia e quando non usarlo: [`docs/model_card.md`](docs/model_card.md).
+
+### Il modello di linguaggio
+
+L'assistente AI usa Ollama in locale (predefinito: gratis, le note non escono dal computer) oppure
+OpenRouter nel cloud. Si sceglie con una variabile in `.env` (`LLM_PROVIDER`, più `LLM_API_KEY` per
+OpenRouter e `OLLAMA_BASE_URL` se Ollama non è su `localhost`; dal contenitore usa
+`http://host.docker.internal:11434`). Per provare che il provider risponde davvero:
+
+```bash
+python scripts/verifica_llm.py
+```
 
 ### Aggiornare un database che esiste già
 
