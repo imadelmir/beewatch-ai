@@ -73,8 +73,9 @@ python scripts/run_etl.py         # oppure: docker compose run --rm app python s
 | Modello assente | `ModelError` con un messaggio che dice di lanciare il training; l'app non addestra né scarica nulla all'avvio | M4-T7 (predictor) |
 | Ricostruzione | dal clone pulito: ETL, poi training; con lo stesso dataset (SHA-256) e il seed fissato si ottiene lo stesso modello | M4-T7 |
 
-Nessun `.joblib` viene committato adesso: non esiste ancora un training
-documentato che lo produca.
+Nessun `.joblib` veniva committato quando fu presa questa decisione: non esisteva ancora
+un training documentato che lo producesse. Ora c'è, con M4-T7
+([`M4-T7_modello_e_predittore.md`](M4-T7_modello_e_predittore.md)).
 
 ## Verifica da clone pulito
 

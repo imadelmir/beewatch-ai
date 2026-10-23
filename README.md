@@ -33,7 +33,7 @@ conversazionale che può girare interamente sul tuo computer.
 |---|---|
 | **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
 | **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza, accesso ai dati (transazioni, repository) ed ETL del dataset USDA |
-| **Risultato finora** | 3 milestone su 8 chiuse, 624 test automatici (530 rapidi + 94 con MySQL in Docker), CI verde |
+| **Risultato finora** | 3 milestone su 8 chiuse, 689 test automatici (585 rapidi + 104 con MySQL in Docker), CI verde |
 | **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
 | **Demo** | Non ancora: l'interfaccia e la milestone M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
 | **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
@@ -135,6 +135,20 @@ docker compose run --rm app python scripts/run_etl.py
 ```
 
 Come è fatto, cosa dice e cosa non può dire: [`docs/markdown/M2-dati/dati.md`](docs/markdown/M2-dati/dati.md).
+
+### Il modello
+
+Il modello di previsione è già nel repository, addestrato e documentato:
+`models/produzione_v1.joblib` e, accanto, `models/produzione_v1.json` (versione, dati usati,
+metriche, intervallo, versioni delle librerie). L'applicazione lo carica, **non lo addestra mai**
+da sola. Per rifarlo da zero, dopo aver caricato il dataset (si usa sempre il database, mai il CSV):
+
+```bash
+python scripts/train_model.py
+```
+
+Stessi dati, stesso seme e stesse librerie danno le stesse previsioni. Cosa sa fare, quanto
+sbaglia e quando non usarlo: [`docs/model_card.md`](docs/model_card.md).
 
 ## Struttura del progetto
 

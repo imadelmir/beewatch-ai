@@ -1,0 +1,148 @@
+{
+  "schema": 1,
+  "versione": "v1.0.0",
+  "addestrato_il": "2026-10-23T10:02:49+00:00",
+  "algoritmo": "RandomForestRegressor",
+  "iperparametri": {
+    "n_estimators": 200,
+    "max_depth": null,
+    "min_samples_leaf": 5,
+    "random_state": 42
+  },
+  "target": {
+    "nome": "resa_per_colonia_kg",
+    "unita": "kg per colonia"
+  },
+  "feature": [
+    "codice_stato",
+    "anno",
+    "resa_anno_prima",
+    "resa_media_3_anni_prima",
+    "colonie_anno_prima"
+  ],
+  "feature_motivi": {
+    "codice_stato": "il livello di resa di ogni stato (clima, flora, pratiche): one-hot",
+    "anno": "la tendenza: la resa cala di circa mezzo chilo l'anno (M2-T3)",
+    "resa_anno_prima": "la persistenza, la baseline più forte (M4-T1)",
+    "resa_media_3_anni_prima": "un livello recente meno rumoroso di un anno solo",
+    "colonie_anno_prima": "la scala dell'apicoltura dello stato, in logaritmo"
+  },
+  "feature_escluse": {
+    "resa_per_colonia_kg": "il target dell'anno da prevedere",
+    "numero_colonie": "è dello stesso anno: alla fine dell'anno prima non si conosce",
+    "produzione_totale_kg": "colonie × resa: contiene il target (R5, leakage)",
+    "valore_produzione_usd": "produzione × prezzo: contiene il target (R5, leakage)",
+    "scorte_kg": "mercato, non biologia (M2-T3); dello stesso anno sarebbe leakage",
+    "prezzo_per_kg_usd": "mercato, non biologia (M2-T3); dello stesso anno sarebbe leakage"
+  },
+  "dataset": {
+    "origine": "MySQL, query Q8 su produzione_usda (pannello bilanciato)",
+    "righe": 600,
+    "stati": 40,
+    "anno_minimo": 1998,
+    "anno_massimo": 2012,
+    "sha256_pannello": "3ee0ff1910de63b631fe830bde2f3e93c41d2335720eabf775902c9eb0f038a4",
+    "sha256_csv_ufficiale": "70a831b5c9872904df3aa3fc4142a5749f968e7e64405f6e2e116c5c49ed038e"
+  },
+  "addestramento": {
+    "righe": 600,
+    "seed": 42,
+    "strategia": "La stessa configurazione della valutazione, riaddestrata su tutte le righe del pannello (1998–2012) per prevedere l'anno dopo gli ultimi dati. Le metriche sono quelle del modello addestrato fino al 2009 e verificato sul 2010–2012: il modello salvato non ha una verifica propria."
+  },
+  "metriche": {
+    "hold_out_2010_2012": {
+      "righe": 120,
+      "addestramento_fino_al": 2009,
+      "mae_kg": 3.498627342552852,
+      "rmse_kg": 4.482644632213401,
+      "r2": 0.6235583967897167
+    },
+    "cross_validation": {
+      "fold": 3,
+      "mae_kg": {
+        "media": 4.088343649982186,
+        "dev_std": 0.11577475014955561
+      },
+      "rmse_kg": {
+        "media": 5.322473342031244,
+        "dev_std": 0.30149345521901
+      },
+      "r2": {
+        "media": 0.5685182790384095,
+        "dev_std": 0.04211332309586814
+      }
+    },
+    "baseline_hold_out": {
+      "media globale": {
+        "mae_kg": 6.654582687500001,
+        "rmse_kg": 8.371105240413891,
+        "r2": -0.31278799375125055
+      },
+      "media dello stato": {
+        "mae_kg": 5.727237083333334,
+        "rmse_kg": 6.7982047910952295,
+        "r2": 0.13420020433866076
+      },
+      "media dello stato + tendenza annuale": {
+        "mae_kg": 4.1680748344017085,
+        "rmse_kg": 5.434966558717811,
+        "r2": 0.44662090992555714
+      },
+      "persistenza (resa dell'anno prima)": {
+        "mae_kg": 4.0634283333333325,
+        "rmse_kg": 5.296387824750625,
+        "r2": 0.47448084620151054
+      }
+    },
+    "criterio_da05": {
+      "modello_mae_kg": 3.498627342552852,
+      "persistenza_mae_kg": 4.0634283333333325,
+      "soddisfatto": true
+    },
+    "nota": "Il 2010–2012 non è un test indipendente: ha scelto la famiglia di modelli."
+  },
+  "intervallo": {
+    "livello": 0.8,
+    "inferiore_kg": -5.713728077942633,
+    "superiore_kg": 6.5839953345482325,
+    "residui": 360,
+    "copertura_hold_out_da_cv": 0.85,
+    "calibrazione": "Quantili p10 e p90 dei residui fuori campione (vero − previsto): 240 della cross-validation 2004–2009 e 120 del 2010–2012. L'ampiezza è costante: copre meno delle previsioni alte."
+  },
+  "importanza_variabili": {
+    "unita": "aumento del MAE in kg se la variabile viene mischiata (2010–2012)",
+    "valori": {
+      "resa_media_3_anni_prima": {
+        "media_kg": 2.7565065198233185,
+        "dev_std_kg": 0.24144467475690848
+      },
+      "resa_anno_prima": {
+        "media_kg": 0.19572998553616794,
+        "dev_std_kg": 0.08963004538282814
+      },
+      "colonie_anno_prima": {
+        "media_kg": 0.11334405384377504,
+        "dev_std_kg": 0.08437105735857146
+      },
+      "codice_stato": {
+        "media_kg": 0.008842322048129314,
+        "dev_std_kg": 0.010481096159464133
+      },
+      "anno": {
+        "media_kg": 0.0,
+        "dev_std_kg": 0.0
+      }
+    }
+  },
+  "ambiente": {
+    "python": "3.14.6",
+    "scikit-learn": "1.9.0",
+    "pandas": "3.0.5",
+    "numpy": "2.5.1",
+    "joblib": "1.5.3"
+  },
+  "file": {
+    "joblib": "produzione_v1.joblib",
+    "sha256_joblib": "f547708cb59f825e175e62c5ffb0399fcab5dd8152ab8f7ac23c8d6497375885"
+  }
+}

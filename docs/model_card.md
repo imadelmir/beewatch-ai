@@ -623,7 +623,16 @@ quattro stati con serie incomplete (MD, NV, OK, SC) restano fuori dall'addestram
 
 Dettagli e decisioni: [`M4-T6_valutazione_finale.md`](markdown/M4-machine-learning/M4-T6_valutazione_finale.md).
 
+## Il modello salvato (M4-T7)
+
+Il modello che l'app carica è `models/produzione_v1.joblib`, con `models/produzione_v1.json`
+accanto (versione `v1.0.0`). È la **stessa configurazione** di questa valutazione,
+**riaddestrata su tutte le 600 righe** (1998–2012), perché per prevedere il 2013 conviene che
+conosca anche il 2010–2012. Le metriche, l'intervallo e l'importanza del `.json` sono quelli del
+modello addestrato fino al 2009 descritto sopra: **il modello salvato non ha una verifica
+propria**. L'impronta del pannello e la riproducibilità dell'addestramento sono controllate da
+test. Dettagli: [`M4-T7_modello_e_predittore.md`](markdown/M4-machine-learning/M4-T7_modello_e_predittore.md).
+
 ## Da completare
 
-- Salvataggio del modello adottato con i suoi metadati (intervallo, importanza, metriche, hash del dataset) e `Predittore` (M4-T7)
 - Servizio di previsione che usa l'intervallo finale e la regola «intervallo più largo della stima» (M4-T8)
