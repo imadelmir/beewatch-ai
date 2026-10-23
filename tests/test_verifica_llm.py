@@ -32,6 +32,9 @@ def carica_script() -> ModuleType:
 def script(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     modulo = carica_script()
     monkeypatch.setattr(modulo, "configura", lambda: None)
+    # Senza nuovi tentativi: un errore deve arrivare subito, non dopo 1 + 2 + 4 secondi veri.
+    crea_vero = modulo.crea_client
+    monkeypatch.setattr(modulo, "crea_client", lambda cfg: crea_vero(cfg, attese=()))
     return modulo
 
 
