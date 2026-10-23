@@ -27,7 +27,13 @@ import pandas as pd
 from sklearn.model_selection import GridSearchCV
 
 from beewatch.ml.features import TARGET, costruisci_feature_storiche
-from beewatch.ml.train import RANDOM_FOREST, SEED, ULTIMO_ANNO_ADDESTRAMENTO, crea_modelli
+from beewatch.ml.train import (
+    RANDOM_FOREST,
+    RANDOM_FOREST_OTTIMIZZATA,
+    SEED,
+    ULTIMO_ANNO_ADDESTRAMENTO,
+    crea_modelli,
+)
 from beewatch.ml.validazione import (
     FOLD_TEMPORALI,
     CrossValidazione,
@@ -44,7 +50,7 @@ GRIGLIA_RANDOM_FOREST: dict[str, list[Any]] = {
 }
 
 DEFAULT = f"{RANDOM_FOREST} (default)"
-OTTIMIZZATA = f"{RANDOM_FOREST} (ottimizzata)"
+OTTIMIZZATA = RANDOM_FOREST_OTTIMIZZATA
 
 
 @dataclass(frozen=True, eq=False)

@@ -33,7 +33,7 @@ conversazionale che può girare interamente sul tuo computer.
 |---|---|
 | **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
 | **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza, accesso ai dati (transazioni, repository) ed ETL del dataset USDA |
-| **Risultato finora** | 3 milestone su 8 chiuse, 594 test automatici (501 rapidi + 93 con MySQL in Docker), CI verde |
+| **Risultato finora** | 3 milestone su 8 chiuse, 624 test automatici (530 rapidi + 94 con MySQL in Docker), CI verde |
 | **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
 | **Demo** | Non ancora: l'interfaccia e la milestone M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
 | **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
