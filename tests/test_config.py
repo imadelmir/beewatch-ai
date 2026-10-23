@@ -180,6 +180,44 @@ def test_ollama_non_richiede_chiave(scrivi_env) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Indirizzo di Ollama
+# --------------------------------------------------------------------------- #
+
+
+def test_ollama_risponde_di_norma_sul_computer(scrivi_env) -> None:
+    assert carica(scrivi_env(**MINIMI)).llm.ollama_url == "http://localhost:11434"
+
+
+def test_lindirizzo_di_ollama_si_puo_cambiare_e_perde_la_barra_finale(scrivi_env) -> None:
+    config = carica(scrivi_env(**MINIMI, OLLAMA_BASE_URL=" http://host.docker.internal:11434/ "))
+    assert config.llm.ollama_url == "http://host.docker.internal:11434"
+
+
+def test_un_indirizzo_vuoto_vale_il_predefinito(scrivi_env) -> None:
+    """Compose passa una stringa vuota quando la variabile manca in .env."""
+    assert (
+        carica(scrivi_env(**MINIMI, OLLAMA_BASE_URL="")).llm.ollama_url == "http://localhost:11434"
+    )
+
+
+@pytest.mark.parametrize(
+    "valore", ["localhost:11434", "ftp://localhost", "http://", "ollama", "//x"]
+)
+def test_un_indirizzo_che_non_e_http_e_rifiutato_allavvio(scrivi_env, valore: str) -> None:
+    with pytest.raises(ConfigError, match="OLLAMA_BASE_URL") as errore:
+        carica(scrivi_env(**MINIMI, OLLAMA_BASE_URL=valore))
+    assert "http://localhost:11434" in str(errore.value)  # dice cosa mettere
+
+
+def test_lerrore_dellindirizzo_viene_dopo_il_timeout_nellordine_di_lettura(scrivi_env) -> None:
+    percorso = scrivi_env(**MINIMI, LLM_TIMEOUT=1, OLLAMA_BASE_URL="nonvalido", LOG_LEVEL="X")
+    with pytest.raises(ConfigError) as errore:
+        carica(percorso)
+    righe = [r.split()[1] for r in str(errore.value).splitlines() if r.startswith("  · ")]
+    assert righe == ["LLM_TIMEOUT", "OLLAMA_BASE_URL", "LOG_LEVEL"]
+
+
+# --------------------------------------------------------------------------- #
 # Segreti e immutabilità
 # --------------------------------------------------------------------------- #
 

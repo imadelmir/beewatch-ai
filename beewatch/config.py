@@ -30,6 +30,7 @@ import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -41,6 +42,7 @@ RADICE = Path(__file__).resolve().parent.parent
 PROVIDER_AMMESSI = ("ollama", "openrouter")
 LIVELLI_LOG = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 MODELLO_PREDEFINITO = "models/produzione_v1.joblib"
+OLLAMA_URL_PREDEFINITO = "http://localhost:11434"
 
 
 # --------------------------------------------------------------------------- #
@@ -109,6 +111,22 @@ def _percorso(nome: str, predefinito: str) -> Path:
     return Path(os.path.normpath(RADICE / valore))
 
 
+def _url(nome: str, errori: list[str], predefinito: str) -> str:
+    """Un indirizzo http o https, senza la barra finale. Assente o vuoto: il predefinito.
+
+    Si controlla solo la forma (schema e host), mai che risponda: all'avvio il servizio
+    può non essere ancora acceso, e l'errore utile arriva alla prima richiesta.
+    """
+    grezzo = os.getenv(nome, "").strip() or predefinito
+    parti = urlsplit(grezzo)
+    if parti.scheme not in ("http", "https") or not parti.netloc:
+        errori.append(
+            f"{nome} deve essere un indirizzo http o https (es. {predefinito}), trovato «{grezzo}»"
+        )
+        return predefinito
+    return grezzo.rstrip("/")
+
+
 def _scelta(nome: str, errori: list[str], ammessi: tuple[str, ...], predefinito: str) -> str:
     """Valore fra quelli ammessi, ignorando maiuscole e minuscole.
 
@@ -159,6 +177,8 @@ class ConfigLLM:
     modello: str
     api_key: str | None = field(repr=False)
     timeout: int
+    # Dove risponde Ollama: sul computer, o `http://host.docker.internal:11434` dal contenitore.
+    ollama_url: str = OLLAMA_URL_PREDEFINITO
 
     @property
     def in_locale(self) -> bool:
@@ -268,6 +288,7 @@ def carica(percorso_env: Path | None = None) -> Config:
         modello=_testo("LLM_MODEL", errori, "llama3.1:8b"),
         api_key=api_key,
         timeout=_intero("LLM_TIMEOUT", errori, 60, 5, 600),
+        ollama_url=_url("OLLAMA_BASE_URL", errori, OLLAMA_URL_PREDEFINITO),
     )
 
     percorso_modello = _percorso("MODEL_PATH", MODELLO_PREDEFINITO)

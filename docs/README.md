@@ -52,6 +52,12 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | M4-T7 | [Modello salvato e predittore](markdown/M4-machine-learning/M4-T7_modello_e_predittore.md) | `.joblib` + `.json` con metadati, `Predittore` con controlli al caricamento, tabella `modelli`, scikit-learn bloccato alla serie 1.9 |
 | M4-T8 | [Servizio di previsione](markdown/M4-machine-learning/M4-T8_servizio_previsione.md) | `Servizi.prevedi_produzione`: validazione, feature solo dal passato, intervallo in chili interi, regola «intervallo più largo della stima», salvataggio con versione e `feature_json` |
 
+### M5 · AI generativa
+
+| Task | Documento | Cosa contiene |
+|---|---|---|
+| M5-T1 | [Client LLM](markdown/M5-ai-generativa/M5-T1_client_llm.md) | `LLMClient` con Ollama e OpenRouter, factory, `OLLAMA_BASE_URL`, test con server finto, verifica reale ancora da fare |
+
 ### M6 · Interfaccia Streamlit
 
 | Documento | Cosa contiene |

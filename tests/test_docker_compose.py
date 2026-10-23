@@ -41,6 +41,7 @@ VARIABILI_DELLAPP = {
     "LLM_MODEL",
     "LLM_API_KEY",
     "LLM_TIMEOUT",
+    "OLLAMA_BASE_URL",
     "MODEL_PATH",
     "LOG_LEVEL",
     "TZ",
@@ -141,7 +142,14 @@ def test_lapp_riceve_solo_le_variabili_che_legge(tmp_path) -> None:
 def test_le_variabili_mancanti_dellapp_sono_vuote_non_inventate(tmp_path) -> None:
     """Se in .env mancano, `config.py` usa i suoi predefiniti: compose passa stringhe vuote."""
     ambiente = renderizza(tmp_path)["services"]["app"]["environment"]
-    for nome in ("LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_TIMEOUT", "MODEL_PATH"):
+    for nome in (
+        "LLM_PROVIDER",
+        "LLM_MODEL",
+        "LLM_API_KEY",
+        "LLM_TIMEOUT",
+        "OLLAMA_BASE_URL",
+        "MODEL_PATH",
+    ):
         assert ambiente[nome] == ""
 
 

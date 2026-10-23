@@ -141,12 +141,18 @@ services:
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_TIMEOUT: ${LLM_TIMEOUT:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
       MODEL_PATH: ${MODEL_PATH:-}
       LOG_LEVEL: ${LOG_LEVEL:-}
       TZ: Europe/Rome
 
     ports:
       - "127.0.0.1:8501:8501"
+
+    # Ollama gira di norma sul computer, non nella rete di Docker: dal contenitore si
+    # raggiunge come `host.docker.internal` (Docker Desktop lo ha già; su Linux serve questa riga).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     # L'healthcheck e' quello del Dockerfile: configurazione valida + Streamlit che
     # risponde + MySQL raggiungibile con le credenziali dell'app (`beewatch.healthcheck`).
