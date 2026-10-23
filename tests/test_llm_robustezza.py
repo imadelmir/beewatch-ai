@@ -231,6 +231,7 @@ def test_se_il_provider_chiede_piu_di_30_secondi_non_si_aspetta_e_lo_si_dice() -
             chiama(client)
 
     assert "attendere 120 secondi" in str(errore.value)
+    assert "tentativi" not in str(errore.value)  # un solo tentativo: niente «dopo 1 tentativi»
     assert len(server.richieste) == 1 and tempo.attese == []  # non si è bloccata l'interfaccia
 
 
@@ -393,3 +394,42 @@ def test_la_factory_passa_la_politica_di_tentativi_al_client() -> None:
     client = crea_client(configurazione, attese=(0.5,), pausa=tempo.pausa, orologio=tempo.orologio)
 
     assert client._attese == (0.5,) and client._pausa == tempo.pausa
+
+
+# --------------------------------------------------------------------------- #
+# Confini (trovati con un test di mutazione)
+# --------------------------------------------------------------------------- #
+
+
+def test_retry_after_di_30_secondi_si_aspetta_e_di_31_no() -> None:
+    """Il limite è «più di 30 secondi»: 30 si aspettano, 31 no (timeout alto: nessun tetto)."""
+    tempo = Tempo()
+    with ServerFinto() as server:
+        client = client_di("openrouter", server.url, tempo, timeout=60)
+        server.rispondi(429, {"error": "x"}, intestazioni={"Retry-After": "30"})
+        server.rispondi(200, OPENROUTER_OK)
+        assert chiama(client).tentativi == 2
+    assert tempo.attese == [30.0]
+
+    with ServerFinto() as server:
+        client = client_di("openrouter", server.url, Tempo(), timeout=60)
+        server.rispondi(429, {"error": "x"}, intestazioni={"Retry-After": "31"})
+        with pytest.raises(LLMError, match="attendere 31 secondi"):
+            chiama(client)
+    assert len(server.richieste) == 1
+
+
+def test_una_data_http_senza_fuso_orario_si_legge_come_utc() -> None:
+    """`formatdate` senza `usegmt` scrive «-0000»: senza fuso, e va confrontata con un'ora aware."""
+    tempo, tentativi = prova_retry_after(formatdate(time.time() + 10))
+    assert tentativi == 2 and 8.0 <= tempo.attese[0] <= 10.0
+
+
+def test_il_suffisso_dei_tentativi_compare_solo_se_ce_ne_sono_stati_piu_di_uno() -> None:
+    # Un solo tentativo perché i nuovi tentativi sono spenti: nessun «dopo 1 tentativi».
+    with ServerFinto() as server:
+        client = ClientOllama("m", 5, server.url, attese=())
+        server.rispondi(503, {"error": "giù"})
+        with pytest.raises(LLMError) as errore:
+            chiama(client)
+    assert "tentativi" not in str(errore.value)
