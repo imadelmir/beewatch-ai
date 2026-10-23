@@ -2,9 +2,9 @@
 
 > **Stato** in costruzione: dati, validazione e baseline (M4-T1), criterio di
 > accettazione (DA-05), feature (M4-T2), confronto fra modelli (M4-T3),
-> cross-validation temporale (M4-T4), tuning (M4-T5). Metriche finali,
-> intervallo e limiti arrivano con M4-T6.
-> **Codice** `beewatch/ml/train.py`, `beewatch/ml/features.py`, `beewatch/ml/validazione.py`, `beewatch/ml/tuning.py` · **Notebook** `notebooks/02_modelli.ipynb` · **Test** `tests/test_train.py`, `tests/test_features.py`, `tests/test_confronto_modelli.py`, `tests/test_validazione.py`, `tests/test_tuning.py`
+> cross-validation temporale (M4-T4), tuning (M4-T5), valutazione finale (M4-T6).
+> Il salvataggio del modello e il servizio di previsione arrivano con M4-T7 e M4-T8.
+> **Codice** `beewatch/ml/train.py`, `beewatch/ml/features.py`, `beewatch/ml/validazione.py`, `beewatch/ml/tuning.py`, `beewatch/ml/valutazione.py`, `scripts/genera_grafici.py` · **Notebook** `notebooks/02_modelli.ipynb` · **Test** `tests/test_train.py`, `tests/test_features.py`, `tests/test_confronto_modelli.py`, `tests/test_validazione.py`, `tests/test_tuning.py`, `tests/test_valutazione.py`, `tests/test_grafici.py`
 
 ## Che cosa prevede
 
@@ -419,6 +419,211 @@ usato per scegliere il modello in M4-T3.
 
 Dettagli: [`M4-T5_tuning.md`](markdown/M4-machine-learning/M4-T5_tuning.md).
 
+## Valutazione finale (M4-T6)
+
+### Il modello adottato
+
+**Random forest** con `n_estimators=200`, `max_depth=None`, `min_samples_leaf=5`,
+`random_state=42`, dietro il preprocessore di M4-T2 (`crea_modello_finale()` in
+`train.py`). La famiglia di modelli è stata scelta in M4-T3 guardando il 2010–2012; gli
+iperparametri in M4-T5 con la sola cross-validation 2004–2009, applicando la regola di
+adozione fissata prima della ricerca. Nessun parametro è stato cambiato dopo aver visto i
+risultati di questa sezione.
+
+Tutti i numeri qui sotto vengono da `beewatch.ml.valutazione.valuta_finale` sul pannello
+Q8 letto da MySQL (`tests/test_valutazione.py` li controlla dal database) e i grafici da
+`python scripts/genera_grafici.py`.
+
+### Risultati misurati
+
+**Sul 2010–2012**, 120 righe, addestramento fino al 2009, kg per colonia (la verifica di
+DA-05):
+
+| | MAE | RMSE | R² | DA-05 |
+|---|---|---|---|---|
+| **Random forest ottimizzata** | **3,4986** | **4,4826** | **0,6236** | ✅ −0,5648 sotto la persistenza |
+| Random forest di default (M4-T3) | 3,6558 | 4,5698 | 0,6088 | ✅ −0,4076 |
+| Persistenza | 4,063428… | 5,2964 | 0,4745 | riferimento |
+| Media dello stato + tendenza | 4,1681 | 5,4350 | 0,4466 | |
+| Media dello stato | 5,7272 | 6,7982 | 0,1342 | |
+| Media globale | 6,6546 | 8,3711 | −0,3128 | |
+
+Il MAE del modello adottato è anche sotto la soglia storica di M2-T3 (4,25 kg), che da sola
+non dimostrava niente: il criterio vincolante è la persistenza.
+
+**Sulla cross-validation 2004–2009**, tre fold, media ± deviazione standard (M4-T4, M4-T5):
+
+| | MAE | RMSE | R² |
+|---|---|---|---|
+| **Random forest ottimizzata** | **4,0883 ± 0,1158** | 5,3225 ± 0,3015 | 0,5685 ± 0,0421 |
+| Media dello stato + tendenza | 4,1006 ± 0,3170 | 5,3544 ± 0,2574 | 0,5559 ± 0,1022 |
+| Persistenza | 4,7797 ± 0,4592 | 6,1067 ± 0,4261 | 0,4333 ± 0,0432 |
+| Media dello stato | 4,7756 ± 0,6258 | 5,9075 ± 0,7454 | 0,4482 ± 0,1931 |
+| Media globale | 7,0827 ± 0,1288 | 8,5478 ± 0,4166 | −0,1127 ± 0,0949 |
+
+![MAE per periodo di valutazione](images/mae_per_periodo.png)
+
+![Previsto contro reale](images/previsto_vs_reale.png)
+
+### Che cosa si può concludere, e che cosa no
+
+| Misurato | Conclusione che regge | Conclusione che non regge |
+|---|---|---|
+| MAE 3,50 kg sul 2010–2012 e 4,09 kg in cross-validation; R² 0,62 e 0,57 | l'errore tipico è di circa 3,5–4 kg per colonia, su una resa media di 28,4 kg | «il modello è accurato al X %» (non esiste in una regressione) |
+| Sotto la persistenza in tutti e quattro i periodi (tre fold e 2010–2012) | il modello batte la persistenza in modo costante, sui dati che abbiamo | che batta la persistenza su anni o stati che non abbiamo |
+| Alla pari con «media dello stato + tendenza» in cross-validation (−0,012 kg), meglio nel 2006–07 e nel 2010–12, peggio nel 2004–05 e nel 2008–09 | nessun vantaggio solido su una retta per stato | che serva un modello di machine learning invece di due medie e una retta |
+| Il 2010–2012 migliora di 0,157 kg con il tuning, la cross-validation di 0,049 | il tuning non ha peggiorato il modello | che il tuning valga 0,16 kg: tre anni sono pochi, e la cifra più prudente è la seconda |
+| R² del mockup 0,87 | — | è un valore illustrativo, non replicato né promesso; l'atteso realistico era 0,4–0,6 |
+
+**Il 2010–2012 non è un test indipendente.** Ha servito a scegliere la famiglia di modelli
+(M4-T3). Il tuning non l'ha visto, e gli errori su quegli anni sono veri errori fuori
+campione, ma la scelta li ha visti: i 3,50 kg sono una stima un po' ottimista. La
+cross-validation 2004–2009 è l'unica misura che non ha scelto il tipo di modello, ma ha
+scelto gli iperparametri. Non esiste una verifica del tutto imparziale: il dataset finisce
+nel 2012.
+
+**La generalizzazione non è dimostrata.** I dati sono commerciali, aggregati per stato e
+fermi al 2012: il modello è stabile fra periodi diversi di quegli stessi dati, e questo è
+tutto quello che le misure permettono di dire.
+
+### Residui
+
+Residuo = valore vero − previsto, in kg per colonia (positivo se il modello sottostima).
+360 previsioni fuori campione: 240 della cross-validation e 120 del 2010–2012, ognuna
+fatta da un modello che non l'ha vista.
+
+![Residui del modello adottato](images/residui.png)
+
+- **Errore medio con segno:** −0,31 kg in cross-validation, **+0,96 kg** sul 2010–2012
+  (sottostima di circa un chilo in quegli anni, in 66 righe su 120). Mediana dei residui
+  −0,32 kg.
+- **Coda a destra:** asimmetria dei residui 0,44; da −13,9 a +20,3 kg. Gli errori
+  grandi sono più spesso sottostime: oltre i 10 kg se ne contano 13 contro 7 sovrastime.
+- **Per anno:** il MAE va da 3,27 (2011) a 4,25 kg (2009); il segno dell'errore cambia da un
+  anno all'altro.
+- **Per stato:** il MAE va da 1,79 (VA) a 7,40 kg (SD), mediana 3,73; con 9 anni per
+  stato sono stime rumorose. **Mississippi** è sottostimato in modo sistematico (errore
+  medio +6,04 kg).
+- **Per livello della previsione:** l'errore cresce con la resa prevista.
+
+  | Fascia (terzili) | Previsto medio | MAE | Ampiezza p10–p90 dei residui |
+  |---|---|---|---|
+  | bassa | 19,9 kg | 3,12 | 10,4 kg |
+  | media | 26,0 kg | 3,93 | 11,7 kg |
+  | alta | 34,4 kg | 4,62 | 14,8 kg |
+
+### Intervallo di previsione
+
+L'intervallo si costruisce sui quantili **p10 e p90 dei residui fuori campione**: l'80 %
+degli errori osservati sta dentro. Estremi: `previsto + p10` e `previsto + p90`.
+
+| | p10 | p90 | Ampiezza |
+|---|---|---|---|
+| Calibrato sulla sola cross-validation (240 residui) | −6,52 kg | +6,15 kg | 12,67 kg |
+| **Finale**, su tutti i 360 residui (quello che userà il servizio) | **−5,71 kg** | **+6,58 kg** | 12,30 kg |
+
+- **Controllo onesto della promessa «80 %»:** l'intervallo calibrato sulla sola
+  cross-validation copre l'**85 %** dei residui del 2010–2012, che non hanno contribuito a
+  costruirlo. Copre di più del 80 % perché in quegli anni gli errori sono stati più piccoli
+  (MAE 3,50 contro 4,09 kg).
+- **Il valore provvisorio di M2-T3 era ± 6 kg:** l'intervallo vero è di ampiezza simile
+  (circa 12 kg), leggermente asimmetrico.
+- **L'ampiezza costante è una semplificazione.** Con l'intervallo finale la copertura è
+  **87 %** per le previsioni basse, **81 %** per le medie e **72,5 %** per le alte (terzile
+  più alto, previsto medio 34,4 kg): lì la promessa «80 %» è ottimistica. La pagina dovrà dire «circa l'80 %», non
+  «80 %».
+- **Regola «se l'intervallo è più largo della stima, la stima non si mostra»:** vale per
+  stime sotto i 12,3 kg. Fra le 360 previsioni fuori campione la più bassa è 13,0 kg, quindi
+  non sarebbe scattata, ma nei dati la resa scende fino a 8,6 kg.
+- **Nessun arrotondamento sotto il chilo** (M2-T3): estremi e stima si mostrano a chili
+  interi.
+
+### Importanza delle variabili
+
+Importanza per permutazione sul 2010–2012 (20 ripetizioni, seed 42): di quanti kg peggiora il
+MAE se si mischiano i valori di una variabile.
+
+| Variabile | Aumento del MAE (kg) |
+|---|---|
+| resa media dei tre anni prima | **2,7565** ± 0,2414 |
+| resa dell'anno prima | 0,1957 ± 0,0896 |
+| colonie dell'anno prima | 0,1133 ± 0,0844 |
+| stato | 0,0088 ± 0,0105 |
+| anno | 0,0000 ± 0,0000 |
+
+![Importanza delle variabili](images/importanza_variabili.png)
+
+- Il modello è, in sostanza, **«il livello recente dello stato»**: la media degli ultimi tre
+  anni pesa oltre quattordici volte l'anno prima. Lo stato come identità aggiunge quasi
+  niente oltre ai ritardi.
+- **`anno` vale zero per costruzione, non perché sia inutile:** i suoi valori nel 2010–2012
+  sono tutti oltre quelli visti in addestramento (fino al 2009), quindi ogni soglia imparata
+  manda quelle righe dalla stessa parte, qualunque sia il valore mischiato. La tendenza
+  (−0,5 kg l'anno) il modello la porta nei ritardi, non in `anno`. Un test lo verifica.
+- **Variabili correlate:** la media dei tre anni e l'anno prima sono molto vicine; mischiarne
+  una lascia l'altra a compensare, quindi l'importanza dell'anno prima è sottostimata.
+
+### Il target e lo sbilanciamento
+
+**Lo sbilanciamento delle classi non si applica a una regressione**: il target è un numero
+continuo e non ci sono classi da bilanciare. La distribuzione del target è stata comunque
+verificata e trattata.
+
+![Distribuzione della resa per colonia](images/distribuzione_target.png)
+
+| 600 righe del pannello Q8 | kg per colonia |
+|---|---|
+| Media / mediana | 28,40 / 27,44 |
+| Deviazione standard | 8,83 |
+| Minimo – massimo | 8,62 – 61,69 |
+| p10 – p90 | 18,14 – 40,37 |
+| Asimmetria | 0,67 (0,69 sulle 626 righe) |
+
+La coda a destra è moderata. **Nessuna trasformazione del target**: la foresta predice medie
+di valori del target dentro le foglie, quindi resta nell'intervallo osservato e non assume
+una distribuzione; l'errore e l'intervallo si esprimono in kg per colonia, e un logaritmo
+li renderebbe meno leggibili. Il costo, visibile nei residui, è una coda di sottostime.
+
+Anche il **pannello** va guardato: Q8 è bilanciato per costruzione (40 stati × 15 anni), ma
+quattro stati con serie incomplete (MD, NV, OK, SC) restano fuori dall'addestramento
+(regola R10 di M2-T2).
+
+### Limiti del modello
+
+1. **Dati commerciali, aggregati e statunitensi** (M2-T3, limiti 1–3). Una riga è la media di
+   uno stato intero; l'apicoltura è commerciale e nomade; nessuno stato ha il clima
+   italiano. Non descrive un apiario amatoriale.
+2. **Epoca ed estrapolazione.** I dati si fermano al 2012. Il modello prevede l'anno *t* dai
+   ritardi di *t − 1…t − 3*: serve la resa vera dell'anno prima, quindi il solo anno
+   «futuro» che può prevedere è il 2013. Più in là non c'è un ritardo da dare. `anno` esce
+   dal range visto e non porta informazione.
+3. **Variabili assenti** (M2-T3, limite 5). Niente meteo, forza della famiglia, varroa,
+   fioriture: `stato` e ritardi sono proxy grossolane.
+4. **Selezione sugli stessi dati.** Il 2010–2012 ha scelto la famiglia di modelli e la
+   cross-validation gli iperparametri; 120 e 240 righe, con 40 stati e pochi anni, fanno
+   stime rumorose. Nessuna verifica del tutto indipendente.
+5. **Nessun vantaggio solido su una baseline semplice.** In cross-validation il modello è alla
+   pari con «media dello stato + tendenza».
+6. **Intervallo a larghezza costante.** Copre il 72,5 % delle previsioni alte contro l'80 %
+   promesso.
+7. **Errore diseguale fra stati.** Da 1,8 a 7,4 kg di MAE; il Mississippi è sottostimato di
+   6 kg in media.
+
+### Quando non usarlo
+
+- **Per prevedere la produzione di un alveare o di un apiario reale**, italiano o amatoriale,
+  né per consigliare quando smielare, nutrire o trattare: il modello non sa niente
+  dell'alveare. È una stima di riferimento di tipo statistico.
+- **Mostrando un numero secco o una percentuale di accuratezza.** Sempre l'intervallo, e
+  «circa l'80 %».
+- **Per un anno oltre il 2013**, per stati fuori dai 40 del pannello (MD, NV, OK, SC e
+  qualunque stato non statunitense) o con dati dell'anno prima mancanti.
+- **Quando l'intervallo è più largo della stima.**
+- **Come strumento diagnostico**: non sostituisce un veterinario o un tecnico apistico.
+
+Dettagli e decisioni: [`M4-T6_valutazione_finale.md`](markdown/M4-machine-learning/M4-T6_valutazione_finale.md).
+
 ## Da completare
-- Metriche finali, residui, importanza delle variabili, intervallo di
-  previsione, limiti, quando non usarlo (M4-T6)
+
+- Salvataggio del modello adottato con i suoi metadati (intervallo, importanza, metriche, hash del dataset) e `Predittore` (M4-T7)
+- Servizio di previsione che usa l'intervallo finale e la regola «intervallo più largo della stima» (M4-T8)

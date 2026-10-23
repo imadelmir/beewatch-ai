@@ -68,6 +68,12 @@ ALBERO = "albero di decisione"
 RANDOM_FOREST = "random forest"
 SEED = 42
 
+# La configurazione adottata dopo il tuning (M4-T5: la regola di adozione è soddisfatta, il
+# guadagno è marginale) e il nome con cui compare nei confronti. Un test controlla che sia
+# ancora quella che `tuning.ottimizza_random_forest` sceglie.
+PARAMETRI_RF_OTTIMIZZATI = {"n_estimators": 200, "max_depth": None, "min_samples_leaf": 5}
+RANDOM_FOREST_OTTIMIZZATA = f"{RANDOM_FOREST} (ottimizzata)"
+
 
 # --------------------------------------------------------------------------- #
 # Dati
@@ -242,6 +248,12 @@ def crea_modelli(seed: int = SEED) -> dict[str, Pipeline]:
         nome: Pipeline([("prep", crea_preprocessore()), ("modello", regressore)])
         for nome, regressore in regressori.items()
     }
+
+
+def crea_modello_finale(seed: int = SEED) -> Pipeline:
+    """La Pipeline del modello adottato: preprocessore di M4-T2 + random forest ottimizzata."""
+    regressore = RandomForestRegressor(random_state=seed, **PARAMETRI_RF_OTTIMIZZATI)
+    return Pipeline([("prep", crea_preprocessore()), ("modello", regressore)])
 
 
 @dataclass(frozen=True, eq=False)
