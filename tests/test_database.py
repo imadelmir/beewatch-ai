@@ -450,6 +450,8 @@ def test_messaggio_per_un_errore_di_connessione(
     "errno,atteso",
     [
         (1142, "non ha il permesso"),
+        (1054, "non ha le ultime modifiche allo schema"),  # colonna che manca (schema_*.sql)
+        (1146, "Applica i file schema_*.sql"),  # tabella che manca
         (2006, "si è interrotta"),
         (1064, "non è riuscita e non è stata salvata"),
     ],

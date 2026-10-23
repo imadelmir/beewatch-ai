@@ -82,6 +82,11 @@ _SERVER_IRRAGGIUNGIBILE = (
     "Impossibile connettersi al database. Verifica che MySQL sia avviato "
     "(docker compose up -d mysql) e che DB_HOST e DB_PORT in .env siano corretti."
 )
+_SCHEMA_VECCHIO = (
+    "Il database non ha le ultime modifiche allo schema (manca una tabella o una colonna). "
+    "Applica i file schema_*.sql della cartella sql/: il comando è scritto in testa a ciascuno. "
+    "Oppure ricrea il database (docker compose down -v, poi docker compose up -d)."
+)
 _MESSAGGI = {
     1040: "Il database ha troppe connessioni aperte. Riprova fra qualche secondo.",
     1044: (
@@ -93,7 +98,9 @@ _MESSAGGI = {
         "Il database «{nome}» non esiste. Controlla DB_NAME in .env, oppure ricrea "
         "il database (docker compose down -v, poi docker compose up -d)."
     ),
+    1054: _SCHEMA_VECCHIO,  # colonna sconosciuta: lo schema è più vecchio del programma
     1142: "L'utente del database non ha il permesso di eseguire questa operazione.",
+    1146: _SCHEMA_VECCHIO,  # tabella inesistente
     2002: _SERVER_IRRAGGIUNGIBILE,
     2003: _SERVER_IRRAGGIUNGIBILE,
     2005: _SERVER_IRRAGGIUNGIBILE,

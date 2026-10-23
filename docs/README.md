@@ -50,6 +50,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | M4-T5 | [Tuning](markdown/M4-machine-learning/M4-T5_tuning.md) | griglia del backlog sui fold temporali, hold-out escluso, default contro ottimizzata, guadagno marginale dichiarato |
 | M4-T6 | [Valutazione finale](markdown/M4-machine-learning/M4-T6_valutazione_finale.md) | modello adottato, residui, intervallo p10–p90 (copertura 85 % sul 2010–2012), importanza, limiti · [grafici](images/) |
 | M4-T7 | [Modello salvato e predittore](markdown/M4-machine-learning/M4-T7_modello_e_predittore.md) | `.joblib` + `.json` con metadati, `Predittore` con controlli al caricamento, tabella `modelli`, scikit-learn bloccato alla serie 1.9 |
+| M4-T8 | [Servizio di previsione](markdown/M4-machine-learning/M4-T8_servizio_previsione.md) | `Servizi.prevedi_produzione`: validazione, feature solo dal passato, intervallo in chili interi, regola «intervallo più largo della stima», salvataggio con versione e `feature_json` |
 
 ### M6 · Interfaccia Streamlit
 

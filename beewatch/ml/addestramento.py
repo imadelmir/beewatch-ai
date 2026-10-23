@@ -36,7 +36,6 @@ from typing import Any
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
-from beewatch.config import RADICE
 from beewatch.database import Database
 from beewatch.etl import SHA256_DATASET_UFFICIALE
 from beewatch.logging_config import ottieni_logger
@@ -44,6 +43,7 @@ from beewatch.ml.artefatto import (
     SCHEMA_ARTEFATTO,
     VERSIONE_PREDEFINITA,
     impronta_pannello,
+    percorso_per_la_tabella,
     riga_tabella_modelli,
     scrivi_artefatto,
     versioni_ambiente,
@@ -160,15 +160,6 @@ def crea_metadati(
     }
 
 
-def _percorso_per_la_tabella(percorso: Path) -> str:
-    """Il percorso come sta in `modelli.percorso_file`: relativo alla radice se ci sta dentro."""
-    assoluto = Path(percorso).resolve()
-    try:
-        return assoluto.relative_to(RADICE).as_posix()
-    except ValueError:
-        return assoluto.as_posix()
-
-
 def addestra_e_salva(
     database: Database,
     percorso_joblib: Path,
@@ -193,7 +184,7 @@ def addestra_e_salva(
         modello, crea_metadati(dati, valutazione, versione, seed), percorso_joblib
     )
     if registra:
-        riga = riga_tabella_modelli(metadati, _percorso_per_la_tabella(percorso_joblib))
+        riga = riga_tabella_modelli(metadati, percorso_per_la_tabella(percorso_joblib))
         ModelliRepository(database).registra(riga)
         logger.info("Modello %s registrato in `modelli` come attivo", versione)
     return metadati

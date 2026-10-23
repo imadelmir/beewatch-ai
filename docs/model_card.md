@@ -633,6 +633,12 @@ modello addestrato fino al 2009 descritto sopra: **il modello salvato non ha una
 propria**. L'impronta del pannello e la riproducibilità dell'addestramento sono controllate da
 test. Dettagli: [`M4-T7_modello_e_predittore.md`](markdown/M4-machine-learning/M4-T7_modello_e_predittore.md).
 
-## Da completare
+## Il servizio di previsione (M4-T8)
 
-- Servizio di previsione che usa l'intervallo finale e la regola «intervallo più largo della stima» (M4-T8)
+`beewatch/services.py` usa il modello così: per prevedere (stato, anno) costruisce le feature con
+la sola storia degli **anni precedenti**, aggiunge l'intervallo finale (−5,71 / +6,58 kg), arrotonda
+ai chili (stima al più vicino, estremi verso l'esterno) e **non mostra la stima se l'intervallo è
+più largo di essa**. Salva ogni previsione mostrata con la versione del modello e i valori delle
+feature. Gli anni accettati vanno dal secondo anno dei dati all'anno dopo l'ultimo (1999–2013): il
+2013 è la sola previsione futura, gli altri sono prove a ritroso su dati che il modello salvato ha
+già visto. Dettagli: [`M4-T8_servizio_previsione.md`](markdown/M4-machine-learning/M4-T8_servizio_previsione.md).

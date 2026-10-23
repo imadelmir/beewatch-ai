@@ -31,6 +31,7 @@ from beewatch.ml.artefatto import (
     impronta_pannello,
     leggi_metadati,
     percorso_metadati,
+    percorso_per_la_tabella,
 )
 from beewatch.ml.features import FEATURE, TARGET, costruisci_feature_storiche
 from beewatch.ml.predictor import Predittore
@@ -181,9 +182,7 @@ def test_senza_registrazione_non_si_tocca_la_tabella(senza_database, tmp_path: P
 
 
 def test_il_percorso_nella_tabella_e_relativo_se_sta_nel_progetto(senza_database) -> None:
-    assert (
-        addestramento._percorso_per_la_tabella(RADICE / "models" / "x.joblib") == "models/x.joblib"
-    )
+    assert percorso_per_la_tabella(RADICE / "models" / "x.joblib") == "models/x.joblib"
 
 
 def test_il_modello_salvato_si_ricarica_e_prevede_come_quello_addestrato(

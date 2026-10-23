@@ -284,15 +284,17 @@ Table previsioni [headercolor: #8B72C8] {
   stima_kg                 decimal(6,2)      [not null]
   limite_inferiore_kg      decimal(6,2)      [not null]
   limite_superiore_kg      decimal(6,2)      [not null]
+  feature_json             json              [note: 'Valori delle feature usate (M4-T8, sql/schema_02_*.sql); NULL per le previsioni anteriori']
   creato_il                datetime          [not null, default: `CURRENT_TIMESTAMP`]
 
   indexes {
     (utente_id, creato_il) [name: 'idx_previsioni_utente_data']
   }
   Note: '''
-    Gli ingressi del modello sono qui per intero (stato e anno di riferimento):
-    la previsione e' quindi riproducibile a distanza di mesi, ricaricando il
-    .joblib della versione indicata.
+    Gli ingressi del modello sono qui per intero (stato e anno di riferimento e,
+    da M4-T8, i valori esatti delle feature in feature_json): la previsione e'
+    quindi riproducibile a distanza di mesi, ricaricando il .joblib della
+    versione indicata.
     I due limiti sono obbligatori: M2-T3 stabilisce che una previsione si mostra
     sempre come intervallo. CHECK: inferiore <= stima <= superiore.
     L'anno di riferimento NON e' una FK verso produzione_usda: si puo' chiedere
