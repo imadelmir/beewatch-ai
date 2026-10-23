@@ -33,7 +33,7 @@ conversazionale che può girare interamente sul tuo computer.
 |---|---|
 | **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
 | **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza, accesso ai dati (transazioni, repository) ed ETL del dataset USDA |
-| **Risultato finora** | 3 milestone su 8 chiuse, 689 test automatici (585 rapidi + 104 con MySQL in Docker), CI verde |
+| **Risultato finora** | 3 milestone su 8 chiuse, 756 test automatici (639 rapidi + 117 con MySQL in Docker), CI verde |
 | **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
 | **Demo** | Non ancora: l'interfaccia e la milestone M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
 | **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
@@ -149,6 +149,22 @@ python scripts/train_model.py
 
 Stessi dati, stesso seme e stesse librerie danno le stesse previsioni. Cosa sa fare, quanto
 sbaglia e quando non usarlo: [`docs/model_card.md`](docs/model_card.md).
+
+### Aggiornare un database che esiste già
+
+Gli script di `sql/` girano da soli solo alla creazione del database (volume vuoto). Chi ha già
+un volume e riceve una modifica dello schema la applica a mano, **come root** (l'utente
+dell'applicazione non può modificare lo schema, ed è voluto). Ogni file `sql/schema_*.sql` è
+ripetibile e non tocca i dati; il comando è scritto in testa a ciascuno. Per esempio, per la
+colonna `previsioni.feature_json` (M4-T8):
+
+```bash
+docker compose exec -T mysql sh -c \
+  'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --database="$MYSQL_DATABASE"' \
+  < sql/schema_02_previsioni_feature_json.sql
+```
+
+Se manca una modifica, l'applicazione lo dice con un messaggio che rimanda a questo comando.
 
 ## Struttura del progetto
 

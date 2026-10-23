@@ -8,9 +8,9 @@
 # principale). Fa tre cose, e le fa root:
 #
 #   1. crea il database, in utf8mb4;
-#   2. vi applica `schema.sql` e `seed.sql`, gli stessi file del database
-#      principale (non nominano mai il database: per questo si riusano cosi' come
-#      sono). Il seed porta le tabelle di riferimento (stati dell'alveare, livelli
+#   2. vi applica `schema.sql`, le estensioni `schema_*.sql` e `seed.sql`, gli stessi file
+#      del database principale (non nominano mai il database: per questo si riusano
+#      cosi' come sono). Il seed porta le tabelle di riferimento (stati dell'alveare, livelli
 #      di rischio, tipi di miele, stati USA) che modelli, repository ed ETL danno
 #      per scontate, e l'apiario dimostrativo;
 #   3. concede all'utente applicativo SELECT, INSERT, UPDATE, DELETE e nient'altro.
@@ -50,9 +50,18 @@ beewatch_crea_db_test() {
         fi
     done
 
-    local cartella file_sql
+    local cartella file_sql estensione
     cartella="$(dirname "${BASH_SOURCE[0]}")"
-    for file_sql in schema.sql seed.sql; do
+    # Lo schema, poi le sue estensioni (`schema_02_*.sql`, ... in ordine alfabetico: sono le
+    # modifiche arrivate dopo M2, vedi il loro intestazione), poi il seed.
+    local -a file_da_applicare=(schema.sql)
+    for estensione in "${cartella}"/schema_*.sql; do
+        if [ -e "${estensione}" ]; then
+            file_da_applicare+=("$(basename "${estensione}")")
+        fi
+    done
+    file_da_applicare+=(seed.sql)
+    for file_sql in "${file_da_applicare[@]}"; do
         if [ ! -r "${cartella}/${file_sql}" ]; then
             echo "BeeWatch: database di test NON creato: ${cartella}/${file_sql} non si puo' leggere." >&2
             return 1
@@ -87,9 +96,9 @@ SQL
         return 1
     fi
 
-    # Prima lo schema, poi il seed. Entrambi sono idempotenti: rilanciare lo script
-    # non duplica nulla.
-    for file_sql in schema.sql seed.sql; do
+    # Prima lo schema e le sue estensioni, poi il seed. Sono tutti idempotenti: rilanciare
+    # lo script non duplica nulla.
+    for file_sql in "${file_da_applicare[@]}"; do
         if ! MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" "${client[@]}" --database="${nome}" \
             < "${cartella}/${file_sql}" > /dev/null; then
             echo "BeeWatch: database di test incompleto: ${file_sql} non e' stato applicato." >&2

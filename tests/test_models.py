@@ -127,6 +127,8 @@ def test_valori_al_limite_ammessi() -> None:
     crea(Apiario, nome="x" * 120, localita="y" * 160)
     crea(Alveare, codice="A" * 20)
     crea(Previsione, versione_modello="v" * 40)
+    crea(Previsione, feature={"anno": 2013, "stato": "CA", "mancante": None, "resa": 21.5})
+    crea(Previsione, feature=None)
 
 
 def test_note_e_coordinate_non_compaiono_nella_rappresentazione() -> None:
@@ -201,6 +203,11 @@ RIFIUTATI = [
     (Previsione, "anno_riferimento", 2101),
     (Previsione, "stima_kg", "30.123"),
     (Previsione, "limite_superiore_kg", None),
+    (Previsione, "feature", [1, 2]),  # non un dizionario
+    (Previsione, "feature", {1: 2.0}),  # chiave non testuale
+    (Previsione, "feature", {"resa": float("nan")}),  # MySQL non accetta NaN come JSON
+    (Previsione, "feature", {"resa": float("inf")}),
+    (Previsione, "feature", {"resa": object()}),  # non serializzabile
 ]
 
 
@@ -234,6 +241,13 @@ def test_la_stima_deve_stare_dentro_il_suo_intervallo(
             limite_superiore_kg=superiore,
         )
     assert info.value.campo == "stima_kg"
+
+
+def test_le_feature_di_una_previsione_sono_una_copia_non_il_dizionario_di_chi_chiama() -> None:
+    originali = {"anno": 2013, "resa": 21.5}
+    previsione = crea(Previsione, feature=originali)
+    originali["resa"] = 999.0
+    assert previsione.feature == {"anno": 2013, "resa": 21.5}
 
 
 def test_il_messaggio_di_un_valore_fisso_elenca_quelli_ammessi() -> None:

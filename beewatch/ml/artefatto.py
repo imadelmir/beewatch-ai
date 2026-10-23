@@ -32,6 +32,7 @@ from typing import Any
 import joblib
 import pandas as pd
 
+from beewatch.config import RADICE
 from beewatch.exceptions import ModelError
 from beewatch.ml.features import TARGET
 
@@ -153,6 +154,15 @@ def leggi_metadati(percorso_joblib: Path) -> dict[str, Any]:
             f"Riaddestra il modello con: {COMANDO_ADDESTRAMENTO}"
         ) from errore
     return controlla_metadati(metadati, percorso.name)
+
+
+def percorso_per_la_tabella(percorso: Path) -> str:
+    """Il percorso come sta in `modelli.percorso_file`: relativo alla radice se ci sta dentro."""
+    assoluto = Path(percorso).resolve()
+    try:
+        return assoluto.relative_to(RADICE).as_posix()
+    except ValueError:
+        return assoluto.as_posix()
 
 
 def riga_tabella_modelli(metadati: dict[str, Any], percorso_file: str) -> dict[str, Any]:

@@ -601,6 +601,15 @@ def test_q8_dati_di_addestramento_solo_stati_con_la_serie_completa(
 
 
 @pytest.mark.integration
+def test_gli_stati_del_pannello_hanno_nome_e_anni_e_non_comprendono_le_serie_parziali(
+    database_test: Database, produzione_di_prova: None
+) -> None:
+    stati = ProduzioneUsdaRepository(database_test).stati_del_pannello()
+
+    assert stati == [{"codice": "HI", "nome": "Hawaii", "primo_anno": 1998, "ultimo_anno": 2012}]
+
+
+@pytest.mark.integration
 def test_i_codici_degli_stati_sono_i_44_del_seed(database_test: Database) -> None:
     codici = ProduzioneUsdaRepository(database_test).codici_stati()
     assert len(codici) == 44 and {"AL", "HI", "WY"} <= codici
@@ -661,6 +670,26 @@ def test_previsione_salvata_e_q9_con_il_modello_che_la_produce(
                        stima_kg=1, limite_inferiore_kg=0, limite_superiore_kg=2)
         )  # fmt: skip
     assert info.value.campo == "alveare_id"
+
+
+@pytest.mark.integration
+def test_le_feature_di_una_previsione_si_salvano_e_si_rileggono_dallo_storico(
+    database_test: Database, modello_di_prova: str, nuovo_utente: Callable[[], int]
+) -> None:
+    utente = nuovo_utente()
+    previsioni = PrevisioniRepository(database_test)
+    base = {"utente_id": utente, "versione_modello": modello_di_prova,
+            "codice_stato_riferimento": "CA", "anno_riferimento": 2013, "stima_kg": 30,
+            "limite_inferiore_kg": 24, "limite_superiore_kg": 36}  # fmt: skip
+    feature = {"codice_stato": "CA", "anno": 2013, "resa_anno_prima": 21.25,
+               "resa_media_3_anni_prima": None, "colonie_anno_prima": 300000.0}  # fmt: skip
+
+    con = previsioni.salva_previsione(Previsione(**base, feature=feature))
+    senza = previsioni.salva_previsione(Previsione(**base))
+
+    righe = {r["id"]: r for r in previsioni.ultime_previsioni(utente)}
+    assert righe[con.id]["feature_json"] == feature  # tornano come dizionario, con il None
+    assert righe[senza.id]["feature_json"] is None  # le previsioni senza feature restano NULL
 
 
 @pytest.mark.integration

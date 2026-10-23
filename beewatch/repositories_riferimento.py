@@ -89,6 +89,19 @@ class ProduzioneUsdaRepository(_Repository):
             (ANNI_SERIE_COMPLETA,),
         )
 
+    def stati_del_pannello(self) -> list[Riga]:
+        """Gli stati con la serie completa (quelli di Q8, R10), con nome, primo e ultimo anno.
+
+        Sono gli stati per cui il modello può prevedere: per ognuno servono gli anni precedenti.
+        """
+        return self._righe(
+            "SELECT p.codice_stato AS codice, s.nome, MIN(p.anno) AS primo_anno, "
+            "MAX(p.anno) AS ultimo_anno FROM produzione_usda p "
+            "JOIN stati_usa s ON s.codice = p.codice_stato GROUP BY p.codice_stato, s.nome "
+            "HAVING COUNT(*) = %s ORDER BY s.nome",
+            (ANNI_SERIE_COMPLETA,),
+        )
+
     def codici_stati(self) -> set[str]:
         """I codici presenti in `stati_usa` (li carica il seed)."""
         return {r["codice"] for r in self._righe("SELECT codice FROM stati_usa")}
@@ -128,11 +141,19 @@ _UPSERT_MODELLO = (
 )
 
 
+def _json_o_none(valore: dict | None) -> str | None:
+    """Il testo JSON di un dizionario di feature (NaN rifiutati già dal modello), o None."""
+    return None if valore is None else json.dumps(valore, allow_nan=False)
+
+
+def _decodifica_json(valore: str | bytes | None) -> dict | None:
+    """Il valore di una colonna JSON come dizionario (il driver la restituisce come testo)."""
+    return json.loads(valore) if isinstance(valore, str | bytes) else valore
+
+
 def _modello(riga: Riga) -> Riga:
     """Una riga di `modelli` con le colonne JSON decodificate e `attivo` booleano."""
-    decodificate = {
-        c: json.loads(riga[c]) for c in _JSON_MODELLI if isinstance(riga[c], str | bytes)
-    }
+    decodificate = {c: _decodifica_json(riga[c]) for c in _JSON_MODELLI}
     return {**riga, **decodificate, "attivo": bool(riga["attivo"])}
 
 
@@ -171,26 +192,27 @@ class PrevisioniRepository(_Repository):
             cursore.execute(
                 "INSERT INTO previsioni (utente_id, alveare_id, versione_modello, "
                 "codice_stato_riferimento, anno_riferimento, stima_kg, limite_inferiore_kg, "
-                "limite_superiore_kg) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "limite_superiore_kg, feature_json) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (previsione.utente_id, previsione.alveare_id, previsione.versione_modello,
                  previsione.codice_stato_riferimento, previsione.anno_riferimento,
                  previsione.stima_kg, previsione.limite_inferiore_kg,
-                 previsione.limite_superiore_kg),
+                 previsione.limite_superiore_kg, _json_o_none(previsione.feature)),
             )  # fmt: skip
             nuovo_id = cursore.lastrowid
         return Previsione(**{**previsione.__dict__, "id": nuovo_id})
 
     def ultime_previsioni(self, utente_id: int, limite: int = 20) -> list[Riga]:
         """Q9 · storico delle stime, ognuna con il modello che l'ha prodotta e il suo errore."""
-        return self._righe(
+        righe = self._righe(
             "SELECT pr.id, pr.creato_il, al.codice AS alveare, pr.codice_stato_riferimento, "
             "pr.anno_riferimento, pr.stima_kg, pr.limite_inferiore_kg, pr.limite_superiore_kg, "
-            "m.versione, m.algoritmo, m.mae_kg FROM previsioni pr "
+            "pr.feature_json, m.versione, m.algoritmo, m.mae_kg FROM previsioni pr "
             "JOIN modelli m ON m.versione = pr.versione_modello "
             "LEFT JOIN alveari al ON al.id = pr.alveare_id "
             "WHERE pr.utente_id = %s ORDER BY pr.creato_il DESC, pr.id DESC LIMIT %s",
             (utente_id, limite),
         )
+        return [{**r, "feature_json": _decodifica_json(r["feature_json"])} for r in righe]
 
 
 class ConversazioniRepository(_Repository):

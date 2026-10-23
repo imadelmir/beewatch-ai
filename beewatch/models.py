@@ -32,6 +32,7 @@ Esempio:
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -205,6 +206,22 @@ def _valore_fisso(tipo: type[_E], valore: Any, campo: str) -> _E:
         ) from None
 
 
+def _feature(valore: Any, campo: str) -> dict[str, Any] | None:
+    """Un dizionario di valori che MySQL accetta come JSON (niente NaN né infiniti), o None."""
+    if valore is None:
+        return None
+    if not isinstance(valore, dict) or not all(isinstance(chiave, str) for chiave in valore):
+        raise ValidationError(f"Il campo «{campo}» deve essere un dizionario.", campo=campo)
+    try:
+        json.dumps(valore, allow_nan=False)
+    except (TypeError, ValueError):
+        raise ValidationError(
+            f"Il campo «{campo}» deve contenere solo valori numerici o di testo finiti.",
+            campo=campo,
+        ) from None
+    return dict(valore)
+
+
 def _imposta(oggetto: object, **valori: Any) -> None:
     """Scrive i valori normalizzati in una dataclass congelata (solo da __post_init__)."""
     for nome, valore in valori.items():
@@ -369,6 +386,9 @@ class Previsione:
     limite_superiore_kg: Decimal
     alveare_id: int | None = None
     id: int | None = None
+    # I valori delle feature con cui il modello ha previsto (M4-T8): serve a rifare e a
+    # spiegare la previsione anche se `produzione_usda` viene ricaricata. None per quelle vecchie.
+    feature: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         codice = _testo(
@@ -404,4 +424,5 @@ class Previsione:
             limite_superiore_kg=superiore,
             alveare_id=_id(self.alveare_id, "alveare_id", obbligatorio=False),
             id=_id(self.id, "id", obbligatorio=False),
+            feature=_feature(self.feature, "feature"),
         )  # fmt: skip
