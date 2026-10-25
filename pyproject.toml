@@ -41,6 +41,11 @@ dev = [
 [tool.setuptools.packages.find]
 include = ["beewatch*"]
 
+# I prompt sono file markdown dentro il package: senza questa riga un'installazione non
+# modificabile (`pip install .`) li lascerebbe fuori. Il Dockerfile usa `-e`, ma costa una riga.
+[tool.setuptools.package-data]
+"beewatch.ai" = ["prompts/*.md"]
+
 # --------------------------------------------------------------------------- #
 # Ruff: linter e formatter
 # --------------------------------------------------------------------------- #
