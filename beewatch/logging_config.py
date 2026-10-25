@@ -123,7 +123,7 @@ def configura(livello: str | None = None, *, su_file: bool = True) -> logging.Lo
     """Prepara il logger di pacchetto e restituisce il logger radice.
 
     Va chiamata una volta sola, il più presto possibile all'avvio
-    dell'applicazione (in `app.py`, prima di qualunque altra cosa).
+    dell'applicazione (l'interfaccia lo fa in `app/avvio.py`, alla creazione dei servizi).
 
     Args:
         livello: forza un livello specifico (uno fra `LIVELLI_LOG`, senza

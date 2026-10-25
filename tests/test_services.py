@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from beewatch.config import ConfigLLM
 from beewatch.database import Database
 from beewatch.exceptions import ModelError, ValidationError
 from beewatch.ml.features import FEATURE
@@ -452,12 +453,14 @@ def test_crea_servizi_usa_la_configurazione_senza_aprire_connessioni(monkeypatch
     percorsi: list[Path] = []
     monkeypatch.setattr(services, "Database", lambda cfg: ("database", cfg))
     monkeypatch.setattr(services, "Predittore", lambda percorso: percorsi.append(percorso) or "p")
-    configurazione = SimpleNamespace(database="cfg-db", percorso_modello=Path("m.joblib"))
+    llm = ConfigLLM(provider="ollama", modello="llama3.1:8b", api_key=None, timeout=5)
+    configurazione = SimpleNamespace(database="cfg-db", percorso_modello=Path("m.joblib"), llm=llm)
 
     s = crea_servizi(configurazione)
 
     assert isinstance(s, Servizi) and percorsi == []  # il modello non si carica adesso
     assert s.predittore == "p" and percorsi == [Path("m.joblib")]
+    assert s.descrizione_llm == "llama3.1:8b via ollama (chiave: non richiesta)"
 
 
 # --------------------------------------------------------------------------- #

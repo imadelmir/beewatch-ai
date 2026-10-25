@@ -45,6 +45,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY pyproject.toml README.md ./
 COPY beewatch/ ./beewatch/
 COPY app/ ./app/
+# Il tema di Streamlit: lo legge dalla cartella da cui parte `streamlit run` (il WORKDIR).
+COPY .streamlit/ ./.streamlit/
 # Il dataset (DA-04), i comandi e i modelli addestrati: con questi un clone pulito
 # carica i dati e usa il modello senza installare nulla sul computer:
 #   docker compose run --rm app python scripts/run_etl.py
@@ -80,7 +82,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
 # --server.address=0.0.0.0 e' obbligatorio: per impostazione predefinita
 # Streamlit ascolta solo su localhost, che dentro un contenitore significa
 # "nessuno puo' raggiungermi".
-CMD ["streamlit", "run", "app/main.py", \
+CMD ["streamlit", "run", "app/Home.py", \
      "--server.address=0.0.0.0", \
      "--server.port=8501", \
      "--server.headless=true", \

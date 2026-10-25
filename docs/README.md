@@ -68,6 +68,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | Documento | Cosa contiene |
 |---|---|
 | [Specifica dell'interfaccia](markdown/M6-interfaccia/ui_spec.md) | palette, layout, componenti, comportamento delle schermate |
+| [M6-T1 · Scheletro dell'app](markdown/M6-interfaccia/M6-T1_scheletro_app.md) | `Home.py`, `avvio.py`, sei pagine nel menu, tema, cache con TTL, stato della sessione, modello caricato una volta sola |
 
 ### Documenti di riferimento
 

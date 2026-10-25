@@ -5,6 +5,8 @@
 #   docker compose up                avvia tutto; l'app e' su http://localhost:8501
 #   docker compose up --build        idem, ricostruendo prima l'immagine dell'app
 #   docker compose up -d mysql       solo il database (sviluppo: Streamlit sul computer)
+#   streamlit run app/Home.py        l'interfaccia sul computer, dalla radice del progetto;
+#                                    nel contenitore `app` parte da sola (stesso file, Dockerfile)
 #   docker compose logs -f mysql     guarda cosa sta facendo (o `app`)
 #   docker compose down              ferma tutto, i dati restano
 #   docker compose down -v           ferma tutto e CANCELLA i dati
