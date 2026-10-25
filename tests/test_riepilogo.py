@@ -6,6 +6,7 @@ import json
 import logging
 
 import pytest
+from llm_fake import LLMFinto
 
 from beewatch.ai.riepilogo import (
     MESSAGGIO_NON_DISPONIBILE,
@@ -19,7 +20,6 @@ from beewatch.ai.riepilogo import (
     valida_riepilogo,
 )
 from beewatch.exceptions import BeeWatchError, LLMError
-from tests.llm_fake import LLMFinto
 
 VALIDO = {
     "stato_salute": "attenzione",
