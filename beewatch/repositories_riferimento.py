@@ -18,9 +18,11 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 
+from beewatch.exceptions import ValidationError
 from beewatch.models import Previsione
 from beewatch.repositories import (
     _ALVEARE_DELL_UTENTE,
+    _ISPEZIONE_DELL_UTENTE,
     Riga,
     _non_trovato,
     _Repository,
@@ -213,6 +215,55 @@ class PrevisioniRepository(_Repository):
             (utente_id, limite),
         )
         return [{**r, "feature_json": _decodifica_json(r["feature_json"])} for r in righe]
+
+
+class RiepiloghiRepository(_Repository):
+    """I riepiloghi AI delle ispezioni (DA-03, `sql/schema_03_riepiloghi_ispezione.sql`)."""
+
+    def salva(
+        self,
+        utente_id: int,
+        ispezione_id: int,
+        *,
+        riepilogo: dict,
+        stato_salute: str,
+        confidenza: str,
+        provider: str,
+        modello: str,
+        versione_prompt: str,
+        durata_ms: int,
+        token_prompt: int | None,
+        token_risposta: int | None,
+        tentativi: int,
+    ) -> int:
+        """Salva un riepilogo già validato e ne restituisce l'id (l'ispezione dev'essere sua)."""
+        with self._db.transazione() as cursore:
+            _richiedi(cursore, _ISPEZIONE_DELL_UTENTE, (ispezione_id, utente_id),
+                      ValidationError("Ispezione non trovata.", campo="ispezione_id"))  # fmt: skip
+            cursore.execute(
+                "INSERT INTO riepiloghi_ispezione (ispezione_id, utente_id, stato_salute, "
+                "confidenza, riepilogo_json, provider, modello, versione_prompt, durata_ms, "
+                "token_prompt, token_risposta, tentativi) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (ispezione_id, utente_id, stato_salute, confidenza,
+                 json.dumps(riepilogo, ensure_ascii=False, allow_nan=False), provider, modello,
+                 versione_prompt, durata_ms, token_prompt, token_risposta, tentativi),
+            )  # fmt: skip
+            return cursore.lastrowid
+
+    def ultimo(self, utente_id: int, ispezione_id: int) -> Riga | None:
+        """Il riepilogo più recente di un'ispezione dell'utente, con il JSON già decodificato."""
+        righe = self._righe(
+            "SELECT r.id, r.ispezione_id, r.stato_salute, r.confidenza, r.riepilogo_json, "
+            "r.provider, r.modello, r.versione_prompt, r.durata_ms, r.token_prompt, "
+            "r.token_risposta, r.tentativi, r.creato_il FROM riepiloghi_ispezione r "
+            "WHERE r.ispezione_id = %s AND r.utente_id = %s "
+            "ORDER BY r.creato_il DESC, r.id DESC LIMIT 1",
+            (ispezione_id, utente_id),
+        )
+        if not righe:
+            return None
+        return {**righe[0], "riepilogo_json": _decodifica_json(righe[0]["riepilogo_json"])}
 
 
 class ConversazioniRepository(_Repository):

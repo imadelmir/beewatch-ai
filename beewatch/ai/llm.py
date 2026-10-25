@@ -100,6 +100,7 @@ class LLMClient(ABC):
     """Un provider di modelli di linguaggio dietro `completa`."""
 
     provider: str
+    in_locale: bool  # True se le note restano sul computer; False se escono verso un servizio
 
     def __init__(
         self,
@@ -331,6 +332,7 @@ class ClientOllama(LLMClient):
     """Ollama sul computer o in rete locale: gratis, e le note non escono dalla macchina."""
 
     provider = "ollama"
+    in_locale = True
 
     def __init__(
         self, modello: str, timeout: int, url: str = OLLAMA_URL_PREDEFINITO, **politica: Any
@@ -399,6 +401,7 @@ class ClientOpenRouter(LLMClient):
     """OpenRouter nel cloud: serve LLM_API_KEY, e le note escono dal computer."""
 
     provider = "openrouter"
+    in_locale = False
 
     def __init__(
         self,

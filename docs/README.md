@@ -60,6 +60,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | M5-T2 | [Robustezza delle chiamate](markdown/M5-ai-generativa/M5-T2_robustezza_chiamate.md) | tentativi con backoff 1-2-4 s, `Retry-After` (max 30 s), tetto di tempo, solo `LLMError` verso l'interfaccia, mutation test |
 | M5-T3 | [Schema di output e parser](markdown/M5-ai-generativa/M5-T3_schema_e_parser.md) | schema del riepilogo, estrazione del JSON, validazione, un solo tentativo correttivo, fallback onesto |
 | M5-T4 | [Prompt engineering](markdown/M5-ai-generativa/M5-T4_prompt.md) · [`prompt_engineering.md`](prompt_engineering.md) | prompt versionati in file, tre tecniche documentate, dieci note di prova, script per la prova con un modello vero (da eseguire) |
+| M5-T5 | [Assistente e riepiloghi](markdown/M5-ai-generativa/M5-T5_assistente_e_riepiloghi.md) | contesto dell'alveare, riepilogo validato e salvato in `riepiloghi_ispezione` con modello, prompt, durata e token; guasti e privacy |
 
 ### M6 · Interfaccia Streamlit
 

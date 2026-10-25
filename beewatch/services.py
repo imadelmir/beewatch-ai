@@ -12,6 +12,10 @@ e le pagine restano sottili.
 più avanti l'assistente) che i test devono poter sostituire con un finto, e che l'interfaccia
 deve poter tenere in cache una volta sola. Le dipendenze si passano al costruttore.
 
+**L'assistente AI** (M5-T5) segue la stessa regola: il client del modello di linguaggio si crea
+alla prima richiesta di un riepilogo, non all'avvio, e un'app senza provider configurato parte e
+mostra il problema solo quando serve.
+
 **Il predittore si carica alla prima previsione**, non all'avvio: l'applicazione parte anche
 senza il file del modello e lo dice solo quando serve. Si carica una volta sola, anche con più
 thread (Streamlit li usa), e se il caricamento fallisce non si ricorda il fallimento: il
@@ -29,19 +33,35 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from beewatch.ai.assistant import (
+    MAX_PRECEDENTI,
+    MAX_RACCOLTI,
+    AssistenteIspezioni,
+    ContestoIspezione,
+)
+from beewatch.ai.llm import LLMClient, crea_client
+from beewatch.ai.prompt import versione_prompt
+from beewatch.ai.riepilogo import Riepilogo
 from beewatch.config import Config, ottieni
 from beewatch.database import Database
-from beewatch.exceptions import ValidationError
+from beewatch.exceptions import ConfigError, DatabaseError, ValidationError
 from beewatch.logging_config import ottieni_logger
 from beewatch.ml.artefatto import percorso_per_la_tabella, riga_tabella_modelli
 from beewatch.ml.features import FEATURE, TARGET, costruisci_feature_storiche
 from beewatch.ml.predictor import Predittore
 from beewatch.models import Previsione
-from beewatch.repositories import Riga
+from beewatch.repositories import (
+    AlveariRepository,
+    ApiariRepository,
+    IspezioniRepository,
+    RaccoltiRepository,
+    Riga,
+)
 from beewatch.repositories_riferimento import (
     ModelliRepository,
     PrevisioniRepository,
     ProduzioneUsdaRepository,
+    RiepiloghiRepository,
 )
 
 logger = ottieni_logger(__name__)
@@ -85,6 +105,33 @@ class RisultatoPrevisione:
     feature: dict[str, Any]  # i valori con cui il modello ha previsto
 
 
+@dataclass(frozen=True)
+class RiepilogoGenerato:
+    """Il riepilogo AI di un'ispezione, con ciò che serve a mostrarlo e a tracciarlo.
+
+    Se `valido` è falso il modello non ha prodotto nulla di utilizzabile (nemmeno dopo il
+    tentativo correttivo): `riepilogo` è allora il «non disponibile» onesto, `messaggio` lo
+    spiega e nulla è stato salvato. Se `salvato` è falso con `valido` vero, il riepilogo c'è ma
+    il database non l'ha accolto (`id` è None e `messaggio` lo dice): l'interfaccia lo mostra
+    comunque.
+    """
+
+    id: int | None
+    ispezione_id: int
+    riepilogo: Riepilogo
+    valido: bool
+    salvato: bool
+    messaggio: str | None
+    provider: str
+    modello: str
+    versione_prompt: str
+    durata_ms: int
+    token_prompt: int | None
+    token_risposta: int | None
+    tentativi: int  # chiamate al modello: 2 = è servito il tentativo correttivo
+    in_locale: bool  # False = le note sono state inviate a un servizio esterno
+
+
 def _id_positivo(valore: Any, campo: str, *, obbligatorio: bool) -> int | None:
     if valore is None and not obbligatorio:
         return None
@@ -115,13 +162,26 @@ class Servizi:
         produzione: ProduzioneUsdaRepository | None = None,
         previsioni: PrevisioniRepository | None = None,
         modelli: ModelliRepository | None = None,
+        crea_llm: Callable[[], LLMClient] | None = None,
+        ispezioni: IspezioniRepository | None = None,
+        alveari: AlveariRepository | None = None,
+        apiari: ApiariRepository | None = None,
+        raccolti: RaccoltiRepository | None = None,
+        riepiloghi: RiepiloghiRepository | None = None,
     ) -> None:
         self._crea_predittore = crea_predittore
         self._predittore: Predittore | None = None
+        self._crea_llm = crea_llm
+        self._assistente: AssistenteIspezioni | None = None
         self._blocco = threading.Lock()
         self._produzione = produzione or ProduzioneUsdaRepository(database)
         self._previsioni = previsioni or PrevisioniRepository(database)
         self._modelli = modelli or ModelliRepository(database)
+        self._ispezioni = ispezioni or IspezioniRepository(database)
+        self._alveari = alveari or AlveariRepository(database)
+        self._apiari = apiari or ApiariRepository(database)
+        self._raccolti = raccolti or RaccoltiRepository(database)
+        self._riepiloghi = riepiloghi or RiepiloghiRepository(database)
 
     # ----------------------------------------------------------------------- #
     # Dipendenze
@@ -138,6 +198,21 @@ class Servizi:
             if self._predittore is None:
                 self._predittore = self._crea_predittore()
             return self._predittore
+
+    @property
+    def assistente(self) -> AssistenteIspezioni:
+        """L'assistente AI, creato alla prima richiesta e una volta sola.
+
+        Raises:
+            ConfigError: nessun provider configurato per questi servizi.
+            LLMError: il provider scelto non si può usare (per esempio OpenRouter senza chiave).
+        """
+        with self._blocco:
+            if self._assistente is None:
+                if self._crea_llm is None:
+                    raise ConfigError("L'assistente AI non è configurato per questi servizi.")
+                self._assistente = AssistenteIspezioni(self._crea_llm())
+            return self._assistente
 
     # ----------------------------------------------------------------------- #
     # Previsione della produzione
@@ -250,6 +325,156 @@ class Servizi:
         return self._previsioni.ultime_previsioni(utente, limite)
 
     # ----------------------------------------------------------------------- #
+    # Riepilogo AI di un'ispezione
+    # ----------------------------------------------------------------------- #
+
+    def genera_riepilogo_ispezione(self, utente_id: int, ispezione_id: int) -> RiepilogoGenerato:
+        """Il riepilogo strutturato delle note di un'ispezione, generato, validato e salvato.
+
+        Passi: carica l'ispezione (solo se è dell'utente), l'alveare, l'apiario, fino a tre
+        ispezioni precedenti e fino a cinque raccolti (non successivi all'ispezione); li passa
+        all'assistente; se la risposta è valida la salva in `riepiloghi_ispezione` con provider,
+        modello, versione del prompt, durata e token. Ogni chiamata genera un riepilogo nuovo:
+        i vecchi si conservano.
+
+        Cosa succede quando qualcosa va storto:
+        - il provider non risponde (`LLMError`): si propaga, **nulla viene salvato**;
+        - il modello risponde male anche dopo il tentativo correttivo: `valido=False`, nulla
+          salvato;
+        - il database non salva (`DatabaseError`): il riepilogo c'è e si restituisce con
+          `salvato=False` e un messaggio, perché è già costato una chiamata al modello.
+
+        Raises:
+            ValidationError: ispezione non trovata (o non dell'utente), oppure senza note.
+            ConfigError: nessun provider configurato.
+            LLMError: il provider non risponde o rifiuta la richiesta.
+            DatabaseError: il database non risponde durante la lettura del contesto.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        identificativo = _id_positivo(ispezione_id, "ispezione_id", obbligatorio=True)
+
+        contesto = self._contesto_ispezione(utente, identificativo)
+        assistente = self.assistente
+        esito = assistente.riassumi(contesto)
+
+        ultima = esito.risposte[-1]
+        riepilogo = esito.riepilogo
+        versione = versione_prompt()
+        comuni = {
+            "ispezione_id": identificativo,
+            "riepilogo": riepilogo,
+            "provider": ultima.provider,
+            "modello": ultima.modello,
+            "versione_prompt": versione,
+            "durata_ms": esito.durata_ms,
+            "token_prompt": esito.token_prompt,
+            "token_risposta": esito.token_risposta,
+            "tentativi": len(esito.risposte),
+            "in_locale": assistente.in_locale,
+        }
+
+        if not esito.valido:
+            logger.warning(
+                "Riepilogo dell'ispezione %s non ottenuto (%s %s, %d chiamate): non salvato",
+                identificativo,
+                ultima.provider,
+                ultima.modello,
+                len(esito.risposte),
+            )
+            return RiepilogoGenerato(
+                id=None,
+                valido=False,
+                salvato=False,
+                messaggio=(
+                    "Il modello non ha prodotto un riepilogo leggibile. Riprova: le note "
+                    "dell'ispezione non sono state toccate."
+                ),
+                **comuni,
+            )
+
+        try:
+            nuovo_id = self._riepiloghi.salva(
+                utente,
+                identificativo,
+                riepilogo=riepilogo.a_dict(),
+                stato_salute=riepilogo.stato_salute,
+                confidenza=riepilogo.confidenza,
+                provider=ultima.provider,
+                modello=ultima.modello,
+                versione_prompt=versione,
+                durata_ms=esito.durata_ms,
+                token_prompt=esito.token_prompt,
+                token_risposta=esito.token_risposta,
+                tentativi=len(esito.risposte),
+            )
+        except DatabaseError:
+            logger.exception("Riepilogo dell'ispezione %s generato ma non salvato", identificativo)
+            return RiepilogoGenerato(
+                id=None,
+                valido=True,
+                salvato=False,
+                messaggio=(
+                    "Il riepilogo è pronto ma non è stato salvato: il database non ha "
+                    "risposto. Copialo prima di chiudere la pagina."
+                ),
+                **comuni,
+            )
+
+        logger.info(
+            "Riepilogo %s salvato per l'ispezione %s: %s/%s, %s %s, prompt %s, %d ms, token %s→%s",
+            nuovo_id,
+            identificativo,
+            riepilogo.stato_salute,
+            riepilogo.confidenza,
+            ultima.provider,
+            ultima.modello,
+            versione,
+            esito.durata_ms,
+            esito.token_prompt,
+            esito.token_risposta,
+        )
+        return RiepilogoGenerato(id=nuovo_id, valido=True, salvato=True, messaggio=None, **comuni)
+
+    def riepilogo_salvato(self, utente_id: int, ispezione_id: int) -> Riga | None:
+        """L'ultimo riepilogo salvato di un'ispezione dell'utente, o None se non ce n'è."""
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        identificativo = _id_positivo(ispezione_id, "ispezione_id", obbligatorio=True)
+        return self._riepiloghi.ultimo(utente, identificativo)
+
+    def _contesto_ispezione(self, utente_id: int, ispezione_id: int) -> ContestoIspezione:
+        ispezione = self._ispezioni.trova(utente_id, ispezione_id)
+        if ispezione is None:
+            raise ValidationError("Ispezione non trovata.", campo="ispezione_id")
+        if not (ispezione.note and ispezione.note.strip()):
+            raise ValidationError(
+                "L'ispezione non ha note da riassumere: scrivine qualcuna e riprova.", campo="note"
+            )
+        alveare = self._alveari.trova(utente_id, ispezione.alveare_id)
+        apiario = self._apiari.trova(utente_id, alveare.apiario_id) if alveare else None
+        if alveare is None or apiario is None:
+            raise ValidationError("Ispezione non trovata.", campo="ispezione_id")
+
+        chiave = (ispezione.data_ispezione, ispezione.id)
+        precedenti = tuple(
+            i
+            for i in self._ispezioni.ispezioni_per_alveare(utente_id, alveare.id)
+            if (i.data_ispezione, i.id) < chiave
+        )[:MAX_PRECEDENTI]
+        raccolti = tuple(
+            r
+            for r in self._raccolti.per_apiario(utente_id, apiario.id)
+            if r.data_raccolto <= ispezione.data_ispezione
+            and r.alveare_id in (None, alveare.id)  # dell'apiario intero, o di questo alveare
+        )[:MAX_RACCOLTI]
+        return ContestoIspezione(
+            apiario=apiario.nome,
+            alveare=alveare,
+            ispezione=ispezione,
+            precedenti=precedenti,
+            raccolti=raccolti,
+        )
+
+    # ----------------------------------------------------------------------- #
     # Passi di `prevedi_produzione`
     # ----------------------------------------------------------------------- #
 
@@ -317,4 +542,5 @@ def crea_servizi(configurazione: Config | None = None) -> Servizi:
     return Servizi(
         Database(cfg.database),
         crea_predittore=lambda: Predittore(cfg.percorso_modello),
+        crea_llm=lambda: crea_client(cfg.llm),
     )
