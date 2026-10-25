@@ -105,6 +105,14 @@ def main(argomenti: list[str] | None = None) -> int:
     parser.add_argument("--output", default=None, help="scrive i risultati in questo file markdown")
     opzioni = parser.parse_args(argomenti)
 
+    disponibili = sorted(p.stem for p in CARTELLA_NOTE.glob("*.txt"))
+    if opzioni.nota and opzioni.nota not in disponibili:
+        print(
+            f"Nota «{opzioni.nota}» sconosciuta. Quelle disponibili: {', '.join(disponibili)}.",
+            file=sys.stderr,
+        )
+        return 2
+
     try:
         configura()
         cfg = config.ottieni().llm

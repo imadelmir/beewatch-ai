@@ -422,3 +422,14 @@ def test_lo_script_esce_con_1_se_una_nota_non_supera_i_controlli(script, monkeyp
     codice = script.main(["--nota", "02_solo_ok"])
     assert codice == 1
     assert "KO 02_solo_ok" in capsys.readouterr().out
+
+
+def test_una_nota_sconosciuta_e_un_errore_chiaro_e_non_un_traceback(script, monkeypatch, capsys):
+    # Regressione: `--nota inesistente` finiva in un FileNotFoundError con lo stack.
+    chiamato: list[int] = []
+    monkeypatch.setattr(script, "crea_client", lambda cfg: chiamato.append(1))
+    codice = script.main(["--nota", "inesistente"])
+    errore = capsys.readouterr().err
+    assert codice == 2
+    assert "«inesistente» sconosciuta" in errore and "03_a3_varroa_lunga" in errore
+    assert chiamato == []  # nessuna chiamata al modello

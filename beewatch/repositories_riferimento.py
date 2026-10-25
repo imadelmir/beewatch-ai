@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 
-from beewatch.exceptions import ValidationError
 from beewatch.models import Previsione
 from beewatch.repositories import (
     _ALVEARE_DELL_UTENTE,
@@ -239,7 +238,7 @@ class RiepiloghiRepository(_Repository):
         """Salva un riepilogo già validato e ne restituisce l'id (l'ispezione dev'essere sua)."""
         with self._db.transazione() as cursore:
             _richiedi(cursore, _ISPEZIONE_DELL_UTENTE, (ispezione_id, utente_id),
-                      ValidationError("Ispezione non trovata.", campo="ispezione_id"))  # fmt: skip
+                      _non_trovato("Ispezione", "ispezione_id", femminile=True))  # fmt: skip
             cursore.execute(
                 "INSERT INTO riepiloghi_ispezione (ispezione_id, utente_id, stato_salute, "
                 "confidenza, riepilogo_json, provider, modello, versione_prompt, durata_ms, "

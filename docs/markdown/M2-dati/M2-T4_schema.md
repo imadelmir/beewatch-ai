@@ -488,7 +488,7 @@ SELECT al.codice, MAX(i.data_ispezione) AS ultima
 FROM alveari al
 JOIN apiari ap ON ap.id = al.apiario_id
 LEFT JOIN ispezioni i ON i.alveare_id = al.id
-WHERE ap.utente_id = :utente AND al.attivo = TRUE
+WHERE ap.utente_id = :utente AND al.attivo = TRUE AND ap.attivo = TRUE
 GROUP BY al.id, al.codice
 HAVING ultima IS NULL OR ultima < CURDATE() - INTERVAL 30 DAY;
 ```
