@@ -43,12 +43,18 @@ OPENROUTER_OK = {
 }  # fmt: skip
 
 
-def ollama(url: str, timeout: int = 5) -> ClientOllama:
-    return ClientOllama("llama3.1:8b", timeout, url)
+# In questo file i client non riprovano (`attese=()`): qui si prova UNA chiamata, errori compresi.
+# I nuovi tentativi (backoff, Retry-After, tetto di tempo) sono in `test_llm_robustezza.py`.
 
 
-def openrouter(url: str, timeout: int = 5, chiave: str = CHIAVE) -> ClientOpenRouter:
-    return ClientOpenRouter("meta-llama/llama-3.1-8b-instruct", timeout, chiave, url)
+def ollama(url: str, timeout: int = 5, **politica) -> ClientOllama:
+    politica.setdefault("attese", ())
+    return ClientOllama("llama3.1:8b", timeout, url, **politica)
+
+
+def openrouter(url: str, timeout: int = 5, chiave: str = CHIAVE, **politica) -> ClientOpenRouter:
+    politica.setdefault("attese", ())
+    return ClientOpenRouter("meta-llama/llama-3.1-8b-instruct", timeout, chiave, url, **politica)
 
 
 # --------------------------------------------------------------------------- #
@@ -309,7 +315,8 @@ def test_il_log_di_una_chiamata_ha_provider_modello_durata_e_token(caplog) -> No
 
     messaggio = next(r.getMessage() for r in caplog.records if r.name == "beewatch.ai.llm")
     assert re.fullmatch(
-        r"LLM ollama/llama3.1:8b: \d+ ms, token 31→7, richiesta di 2 caratteri", messaggio
+        r"LLM ollama/llama3.1:8b: \d+ ms, token 31→7, 1 tentativo, richiesta di 2 caratteri",
+        messaggio,
     )
 
 
