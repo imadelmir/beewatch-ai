@@ -57,6 +57,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | Task | Documento | Cosa contiene |
 |---|---|---|
 | M5-T1 | [Client LLM](markdown/M5-ai-generativa/M5-T1_client_llm.md) | `LLMClient` con Ollama e OpenRouter, factory, `OLLAMA_BASE_URL`, test con server finto, verifica reale ancora da fare |
+| M5-T2 | [Robustezza delle chiamate](markdown/M5-ai-generativa/M5-T2_robustezza_chiamate.md) | tentativi con backoff 1-2-4 s, `Retry-After` (max 30 s), tetto di tempo, solo `LLMError` verso l'interfaccia, mutation test |
 
 ### M6 · Interfaccia Streamlit
 
