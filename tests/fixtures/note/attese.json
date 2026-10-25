@@ -1,0 +1,74 @@
+{
+  "01_regolare_breve": {
+    "stati_ammessi": [
+      "buono",
+      "attenzione"
+    ],
+    "confidenza_massima": null
+  },
+  "02_solo_ok": {
+    "stati_ammessi": [
+      "non_determinabile",
+      "buono"
+    ],
+    "confidenza_massima": "bassa"
+  },
+  "03_a3_varroa_lunga": {
+    "stati_ammessi": [
+      "attenzione",
+      "critico"
+    ],
+    "confidenza_massima": "media"
+  },
+  "04_sciamatura": {
+    "stati_ammessi": [
+      "attenzione",
+      "buono",
+      "critico"
+    ],
+    "confidenza_massima": null
+  },
+  "05_regina_non_trovata": {
+    "stati_ammessi": [
+      "attenzione",
+      "critico"
+    ],
+    "confidenza_massima": "media"
+  },
+  "06_covata_sospetta": {
+    "stati_ammessi": [
+      "attenzione",
+      "critico"
+    ],
+    "confidenza_massima": "media"
+  },
+  "07_pillaggio": {
+    "stati_ammessi": [
+      "attenzione",
+      "critico"
+    ],
+    "confidenza_massima": "media"
+  },
+  "08_abbreviazioni": {
+    "stati_ammessi": [
+      "buono",
+      "attenzione"
+    ],
+    "confidenza_massima": null
+  },
+  "09_contraddittoria": {
+    "stati_ammessi": [
+      "non_determinabile",
+      "attenzione"
+    ],
+    "confidenza_massima": "media"
+  },
+  "10_istruzioni_nella_nota": {
+    "stati_ammessi": [
+      "attenzione",
+      "critico",
+      "non_determinabile"
+    ],
+    "confidenza_massima": "media"
+  }
+}
