@@ -58,6 +58,7 @@ from beewatch.repositories import (
     Riga,
 )
 from beewatch.repositories_riferimento import (
+    DashboardRepository,
     ModelliRepository,
     PrevisioniRepository,
     ProduzioneUsdaRepository,
@@ -103,6 +104,36 @@ class RisultatoPrevisione:
     versione_modello: str
     errore_medio_kg: float  # il MAE del modello sul 2010–2012
     feature: dict[str, Any]  # i valori con cui il modello ha previsto
+
+
+@dataclass(frozen=True)
+class ApiarioScelta:
+    """Un apiario nell'elenco di scelta: solo ciò che serve a sceglierlo (niente coordinate)."""
+
+    id: int
+    nome: str
+
+
+@dataclass(frozen=True)
+class Panoramica:
+    """Le caselle della Home: quattro numeri e gli apiari tra cui scegliere (query Q1, Q3)."""
+
+    apiari: tuple[ApiarioScelta, ...]
+    alveari_attivi: int
+    ispezioni_30_giorni: int
+    produzione_stagione_kg: float
+    alveari_da_controllare: int  # attivi, mai ispezionati o non ispezionati da oltre 30 giorni
+
+
+@dataclass(frozen=True)
+class StatoModello:
+    """Che modello è caricato e quanto sbaglia: ciò che la Home e la sidebar mostrano."""
+
+    versione: str
+    algoritmo: str
+    mae_kg: float  # l'errore medio sul 2010–2012
+    addestrato_il: str
+    righe_addestramento: int
 
 
 @dataclass(frozen=True)
@@ -168,6 +199,8 @@ class Servizi:
         apiari: ApiariRepository | None = None,
         raccolti: RaccoltiRepository | None = None,
         riepiloghi: RiepiloghiRepository | None = None,
+        dashboard: DashboardRepository | None = None,
+        descrizione_llm: str = "non configurato",
     ) -> None:
         self._crea_predittore = crea_predittore
         self._predittore: Predittore | None = None
@@ -182,6 +215,8 @@ class Servizi:
         self._apiari = apiari or ApiariRepository(database)
         self._raccolti = raccolti or RaccoltiRepository(database)
         self._riepiloghi = riepiloghi or RiepiloghiRepository(database)
+        self._dashboard = dashboard or DashboardRepository(database)
+        self.descrizione_llm = descrizione_llm  # «modello via provider (chiave: …)», senza segreti
 
     # ----------------------------------------------------------------------- #
     # Dipendenze
@@ -213,6 +248,48 @@ class Servizi:
                     raise ConfigError("L'assistente AI non è configurato per questi servizi.")
                 self._assistente = AssistenteIspezioni(self._crea_llm())
             return self._assistente
+
+    # ----------------------------------------------------------------------- #
+    # Panoramica e stato del sistema (Home)
+    # ----------------------------------------------------------------------- #
+
+    def elenca_apiari(self, utente_id: int) -> list[ApiarioScelta]:
+        """Gli apiari attivi dell'utente, per nome: tra questi si sceglie l'apiario attivo."""
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        return [ApiarioScelta(a.id, a.nome) for a in self._apiari.elenca(utente)]
+
+    def panoramica(self, utente_id: int) -> Panoramica:
+        """I numeri della Home per l'utente: alveari, ispezioni recenti, produzione, da controllare.
+
+        Raises:
+            ValidationError: utente non valido.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        riga = self._dashboard.riepilogo(utente)
+        return Panoramica(
+            apiari=tuple(self.elenca_apiari(utente)),
+            alveari_attivi=int(riga["alveari_attivi"]),
+            ispezioni_30_giorni=int(riga["ispezioni_30_giorni"]),
+            produzione_stagione_kg=float(riga["produzione_stagione_kg"]),
+            alveari_da_controllare=len(self._alveari.trascurati(utente)),
+        )
+
+    def stato_modello(self) -> StatoModello:
+        """Il modello di previsione: lo carica (una volta sola) e ne dice versione ed errore.
+
+        Raises:
+            ModelError: il modello manca o non è utilizzabile.
+        """
+        predittore = self.predittore
+        metadati = predittore.metadati
+        return StatoModello(
+            versione=predittore.versione,
+            algoritmo=str(metadati["algoritmo"]),
+            mae_kg=float(metadati["metriche"]["hold_out_2010_2012"]["mae_kg"]),
+            addestrato_il=str(metadati["addestrato_il"]),
+            righe_addestramento=int(metadati["addestramento"]["righe"]),
+        )
 
     # ----------------------------------------------------------------------- #
     # Previsione della produzione
@@ -543,4 +620,5 @@ def crea_servizi(configurazione: Config | None = None) -> Servizi:
         Database(cfg.database),
         crea_predittore=lambda: Predittore(cfg.percorso_modello),
         crea_llm=lambda: crea_client(cfg.llm),
+        descrizione_llm=cfg.llm.descrizione(),
     )

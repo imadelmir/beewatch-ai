@@ -1,0 +1,20 @@
+# Tema e server di Streamlit. La palette è quella del §5 di docs/markdown/M6-interfaccia/ui_spec.md.
+# Streamlit lo legge dalla cartella da cui si lancia `streamlit run`: la radice del progetto (e
+# /app nel contenitore, dove il Dockerfile lo copia).
+#
+# Niente CSS iniettato: il tema è tutto qui, in modo nativo (ui_spec §2 e §13).
+
+[theme]
+base = "light"
+primaryColor = "#C77D02"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FAF6F0"
+textColor = "#1A1A1A"
+font = "sans serif"
+
+[server]
+# Evita che il file watcher rilanci l'app durante la demo
+runOnSave = false
+
+[browser]
+gatherUsageStats = false

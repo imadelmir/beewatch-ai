@@ -33,9 +33,9 @@ conversazionale che può girare interamente sul tuo computer.
 |---|---|
 | **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
 | **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza, accesso ai dati (transazioni, repository) ed ETL del dataset USDA |
-| **Risultato finora** | 3 milestone su 8 chiuse, 1156 test automatici (1016 rapidi + 140 con MySQL in Docker), CI verde |
+| **Risultato finora** | 3 milestone su 8 chiuse, 1223 test automatici (1081 rapidi + 142 con MySQL in Docker), CI verde |
 | **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
-| **Demo** | Non ancora: l'interfaccia e la milestone M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
+| **Demo** | Non ancora: lo scheletro dell'interfaccia c'è (`streamlit run app/Home.py`), le pagine sono M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
 | **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
 | **Stato** | In corso, iniziato ad agosto 2026 — [roadmap](#stato-e-roadmap) · [backlog](../../issues) |
 
@@ -114,6 +114,21 @@ sono tre: `DB_NAME`, `DB_USER`, `DB_PASSWORD`.
 L'applicazione **valida la configurazione all'avvio** e si ferma con un
 messaggio che elenca tutti i problemi insieme, invece di farteli scoprire uno
 alla volta.
+
+### L'interfaccia
+
+Con il database acceso (`docker compose up -d mysql`) e il file `.env` compilato, dalla **radice del
+progetto** (Streamlit legge da lì il tema di `.streamlit/config.toml`):
+
+```bash
+streamlit run app/Home.py
+```
+
+Si apre su <http://localhost:8501>. La Home mostra la panoramica; le sei pagine (Alveari, Ispezioni,
+Previsione, Assistente AI, Dashboard, Trasparenza) sono nel menu a sinistra, nell'ordine del prefisso
+numerico dei file in `app/pages/`. Per ora sono scheletri: il contenuto arriva con le task di M6. Senza
+database, o senza `.env`, l'app parte e lo dice in chiaro invece di rompersi. Con `docker compose up -d`
+parte anche l'interfaccia, nel contenitore.
 
 ### Il dataset
 
