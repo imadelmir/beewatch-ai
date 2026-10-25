@@ -1,0 +1,9 @@
+{
+  "descrizione": "200 con choices vuoto",
+  "stato": 200,
+  "intestazioni": {},
+  "corpo": {
+    "id": "gen-x",
+    "choices": []
+  }
+}

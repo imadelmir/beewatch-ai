@@ -1,0 +1,17 @@
+{
+  "descrizione": "JSON completo ma con stato_salute fuori dall'elenco",
+  "stato": 200,
+  "intestazioni": {},
+  "corpo": {
+    "model": "llama3.1:8b",
+    "created_at": "2026-10-25T10:00:00.000000Z",
+    "message": {
+      "role": "assistant",
+      "content": "{\"stato_salute\": \"ottimo\", \"elementi_rilevati\": [\"famiglia nervosa\", \"regina vista\", \"covata a macchie su due telaini\", \"l'apicoltore segnala una trentina di varroe cadute in tre giorni\"], \"criticita\": [{\"descrizione\": \"covata a macchie insieme a molte varroe segnalate\", \"gravita\": \"media\"}], \"azioni_suggerite\": [{\"azione\": \"far valutare la situazione al servizio veterinario della propria ASL o a un tecnico apistico\", \"priorita\": \"alta\", \"entro_giorni\": 7}, {\"azione\": \"ricontrollare gli alveari vicini\", \"priorita\": \"media\", \"entro_giorni\": null}], \"confidenza\": \"media\", \"campi_non_deducibili\": [\"causa della covata a macchie\", \"numero esatto di varroe\"]}"
+    },
+    "done": true,
+    "done_reason": "stop",
+    "prompt_eval_count": 812,
+    "eval_count": 164
+  }
+}

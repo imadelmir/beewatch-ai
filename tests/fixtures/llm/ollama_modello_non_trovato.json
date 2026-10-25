@@ -1,0 +1,8 @@
+{
+  "descrizione": "il modello non è stato scaricato",
+  "stato": 404,
+  "intestazioni": {},
+  "corpo": {
+    "error": "model 'llama3.1:8b' not found, try pulling it first"
+  }
+}

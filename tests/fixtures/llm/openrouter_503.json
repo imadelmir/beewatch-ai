@@ -1,0 +1,11 @@
+{
+  "descrizione": "provider a monte non disponibile",
+  "stato": 503,
+  "intestazioni": {},
+  "corpo": {
+    "error": {
+      "code": 503,
+      "message": "Provider returned error"
+    }
+  }
+}
