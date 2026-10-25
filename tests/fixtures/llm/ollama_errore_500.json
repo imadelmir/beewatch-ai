@@ -1,0 +1,8 @@
+{
+  "descrizione": "il processo del modello è terminato",
+  "stato": 500,
+  "intestazioni": {},
+  "corpo": {
+    "error": "llama runner process has terminated"
+  }
+}

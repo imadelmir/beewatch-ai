@@ -1,0 +1,13 @@
+{
+  "descrizione": "limite di richieste raggiunto, con Retry-After",
+  "stato": 429,
+  "intestazioni": {
+    "Retry-After": "2"
+  },
+  "corpo": {
+    "error": {
+      "code": 429,
+      "message": "Rate limit exceeded: free-models-per-min"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "descrizione": "chiave rifiutata",
+  "stato": 401,
+  "intestazioni": {},
+  "corpo": {
+    "error": {
+      "code": 401,
+      "message": "No auth credentials found"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "descrizione": "stato 200 ma il corpo contiene un errore",
+  "stato": 200,
+  "intestazioni": {},
+  "corpo": {
+    "error": {
+      "code": 502,
+      "message": "Upstream timeout"
+    }
+  }
+}

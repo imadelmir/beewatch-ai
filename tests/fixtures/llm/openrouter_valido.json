@@ -1,0 +1,24 @@
+{
+  "descrizione": "risposta 200 di /chat/completions con un riepilogo valido",
+  "stato": 200,
+  "intestazioni": {},
+  "corpo": {
+    "id": "gen-esempio",
+    "model": "meta-llama/llama-3.1-8b-instruct",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"stato_salute\": \"attenzione\", \"elementi_rilevati\": [\"famiglia nervosa\", \"regina vista\", \"covata a macchie su due telaini\", \"l'apicoltore segnala una trentina di varroe cadute in tre giorni\"], \"criticita\": [{\"descrizione\": \"covata a macchie insieme a molte varroe segnalate\", \"gravita\": \"media\"}], \"azioni_suggerite\": [{\"azione\": \"far valutare la situazione al servizio veterinario della propria ASL o a un tecnico apistico\", \"priorita\": \"alta\", \"entro_giorni\": 7}, {\"azione\": \"ricontrollare gli alveari vicini\", \"priorita\": \"media\", \"entro_giorni\": null}], \"confidenza\": \"media\", \"campi_non_deducibili\": [\"causa della covata a macchie\", \"numero esatto di varroe\"]}"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 815,
+      "completion_tokens": 170,
+      "total_tokens": 985
+    }
+  }
+}

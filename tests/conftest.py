@@ -9,7 +9,9 @@ progetto (da cui si leggono `.env` e `logs/`) punta a una cartella temporanea.
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from unittest import mock
@@ -84,6 +86,77 @@ def ambiente_pulito(tmp_path: Path) -> Iterator[Path]:
         ottieni.cache_clear()
         yield radice
         ottieni.cache_clear()
+
+
+# --------------------------------------------------------------------------- #
+# Nessuna rete: la suite non può chiamare un provider vero (M5-T6)
+# --------------------------------------------------------------------------- #
+
+_NOMI_LOCALI = frozenset({"", "localhost", "0.0.0.0", "::"})
+
+
+def _indirizzo_locale(host: object) -> bool:
+    """True per il computer stesso (loopback): i soli indirizzi con cui i test possono parlare."""
+    if host is None:
+        return True
+    testo = host.decode() if isinstance(host, bytes) else str(host)
+    if testo in _NOMI_LOCALI or testo.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(testo).is_loopback
+    except ValueError:
+        return False
+
+
+def _blocca(host: object) -> RuntimeError:
+    return RuntimeError(
+        f"Test senza rete: la connessione a «{host}» è bloccata. I test parlano solo con il "
+        "computer stesso (127.0.0.1): un provider vero non si chiama mai dalla suite."
+    )
+
+
+@pytest.fixture(autouse=True)
+def rete_bloccata(ambiente_pulito: Path) -> Iterator[None]:
+    """Vieta le connessioni e le risoluzioni DNS verso qualunque macchina che non sia questa.
+
+    Il server HTTP finto dei test (127.0.0.1) e MySQL nello stack Docker (127.0.0.1, porta mappata)
+    funzionano; Ollama, OpenRouter e Internet no: provano a collegarsi e il test fallisce subito con
+    un messaggio chiaro, invece di passare perché per caso la rete c'era. Così «la suite gira senza
+    rete e senza chiave API» non è una speranza ma una proprietà verificata a ogni esecuzione.
+    """
+    # Un proxy impostato nella shell dello sviluppatore instraderebbe anche le richieste al server
+    # finto (127.0.0.1) fuori dal computer: i test dipenderebbero da come è configurata la sua rete.
+    for nome in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
+        os.environ.pop(nome, None)
+        os.environ.pop(nome.lower(), None)
+    os.environ["NO_PROXY"] = os.environ["no_proxy"] = "127.0.0.1,localhost,::1"
+
+    connect = socket.socket.connect
+    connect_ex = socket.socket.connect_ex
+    risolvi = socket.getaddrinfo
+
+    def connect_guardato(self: socket.socket, indirizzo: object) -> None:
+        if self.family in (socket.AF_INET, socket.AF_INET6) and isinstance(indirizzo, tuple):
+            if not _indirizzo_locale(indirizzo[0]):
+                raise _blocca(indirizzo[0])
+        return connect(self, indirizzo)  # type: ignore[arg-type]
+
+    def connect_ex_guardato(self: socket.socket, indirizzo: object) -> int:
+        if self.family in (socket.AF_INET, socket.AF_INET6) and isinstance(indirizzo, tuple):
+            if not _indirizzo_locale(indirizzo[0]):
+                raise _blocca(indirizzo[0])
+        return connect_ex(self, indirizzo)  # type: ignore[arg-type]
+
+    def risolvi_guardato(host: object, *argomenti: object, **opzioni: object):
+        if not _indirizzo_locale(host):
+            raise _blocca(host)
+        return risolvi(host, *argomenti, **opzioni)  # type: ignore[arg-type]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(socket.socket, "connect", connect_guardato)
+        mp.setattr(socket.socket, "connect_ex", connect_ex_guardato)
+        mp.setattr(socket, "getaddrinfo", risolvi_guardato)
+        yield
 
 
 @pytest.fixture
