@@ -562,6 +562,14 @@ def test_init_rotto_non_e_silenzioso_ne_al_primo_ne_al_secondo_avvio(tmp_path) -
             "up --wait e' riuscito con uno script di init rotto:\n" + uscita
         )
         assert "exited" in uscita or "unhealthy" in uscita, uscita[-800:]
+        # Con i controlli rapidi `up --wait` puo' arrendersi («unhealthy») mentre l'entrypoint
+        # di MySQL sta ancora uscendo dopo l'errore: si aspetta che si fermi davvero, entro un
+        # tempo limitato, invece di fotografarlo a meta' (era un test instabile in CI).
+        attendi(
+            lambda stack=stack: _stato_mysql(stack)["Status"] != "running",
+            60,
+            "MySQL si fermi dopo l'errore nello script di init",
+        )
         stato = _stato_mysql(stack)
         assert stato["Status"] == "exited" and stato["ExitCode"] != 0, stato
         assert stato["RestartCount"] == 0, "Docker ha riavviato MySQL e nascosto l'errore"

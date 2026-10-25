@@ -25,6 +25,7 @@ subito.
 
 from __future__ import annotations
 
+import codecs
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
@@ -119,6 +120,30 @@ def _crea_handler_su_file() -> RotatingFileHandler:
         ) from errore
 
 
+def prepara_console() -> None:
+    """Porta in UTF-8 l'uscita standard e quella d'errore, se non lo sono già.
+
+    Su Windows, quando l'uscita va su file o in una pipe (`python scripts/train_model.py >
+    esito.txt`), Python scrive in cp1252: un carattere come «→», che compare nelle stampe degli
+    script e nelle righe di log, solleva `UnicodeEncodeError`, e lo script fallisce *dopo* aver
+    fatto il suo lavoro. Nel terminale, nei contenitori e in CI l'uscita è già UTF-8 e qui non
+    cambia nulla. Un flusso che non si può riconfigurare (quello dei test) si lascia com'è.
+    """
+    for flusso in (sys.stdout, sys.stderr):
+        codifica = getattr(flusso, "encoding", None) or ""
+        try:
+            gia_utf8 = codecs.lookup(codifica).name == "utf-8"
+        except LookupError:
+            gia_utf8 = False
+        riconfigura = getattr(flusso, "reconfigure", None)
+        if gia_utf8 or riconfigura is None:
+            continue
+        try:
+            riconfigura(encoding="utf-8", errors="backslashreplace")
+        except (OSError, ValueError):
+            pass  # flusso già chiuso o non riconfigurabile: meglio così che non partire
+
+
 def configura(livello: str | None = None, *, su_file: bool = True) -> logging.Logger:
     """Prepara il logger di pacchetto e restituisce il logger radice.
 
@@ -139,6 +164,7 @@ def configura(livello: str | None = None, *, su_file: bool = True) -> logging.Lo
         ConfigError: livello non valido, oppure cartella/file di log non
             utilizzabile. In entrambi i casi il logger resta com'era.
     """
+    prepara_console()  # prima di tutto: anche il messaggio di un errore va stampato
     radice = logging.getLogger(NOME_LOGGER)
     richiesto = _livello_richiesto(livello)
 

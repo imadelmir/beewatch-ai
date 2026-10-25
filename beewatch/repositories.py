@@ -44,8 +44,8 @@ class _Repository:
             return cursore.fetchall()
 
 
-def _non_trovato(cosa: str, campo: str) -> ValidationError:
-    return ValidationError(f"{cosa} non trovato.", campo=campo)
+def _non_trovato(cosa: str, campo: str, *, femminile: bool = False) -> ValidationError:
+    return ValidationError(f"{cosa} non {'trovata' if femminile else 'trovato'}.", campo=campo)
 
 
 def _richiedi(cursore: Any, sql: str, parametri: tuple[Any, ...], errore: ValidationError) -> None:
@@ -210,12 +210,12 @@ class AlveariRepository(_Repository):
         )
 
     def trascurati(self, utente_id: int, giorni: int = 30) -> list[Riga]:
-        """Q3 · alveari attivi mai ispezionati o non ispezionati da più di `giorni` giorni."""
+        """Q3 · alveari attivi (in apiari attivi) mai ispezionati o non da oltre `giorni` giorni."""
         return self._righe(
             "SELECT al.id, al.codice, MAX(i.data_ispezione) AS ultima "
             "FROM alveari al JOIN apiari ap ON ap.id = al.apiario_id "
             "LEFT JOIN ispezioni i ON i.alveare_id = al.id "
-            "WHERE ap.utente_id = %s AND al.attivo = TRUE GROUP BY al.id, al.codice "
+            "WHERE ap.utente_id = %s AND al.attivo AND ap.attivo GROUP BY al.id, al.codice "
             "HAVING ultima IS NULL OR ultima < CURDATE() - INTERVAL %s DAY ORDER BY al.codice",
             (utente_id, giorni),
         )
@@ -332,7 +332,7 @@ class IspezioniRepository(_Repository):
     def elimina(self, utente_id: int, ispezione_id: int) -> None:
         with self._db.transazione() as cursore:
             _richiedi(cursore, _ISPEZIONE_DELL_UTENTE, (ispezione_id, utente_id),
-                      _non_trovato("Ispezione", "id"))  # fmt: skip
+                      _non_trovato("Ispezione", "id", femminile=True))  # fmt: skip
             cursore.execute("DELETE FROM ispezioni WHERE id = %s", (ispezione_id,))
 
 

@@ -353,6 +353,22 @@ def test_q3_alveari_trascurati(repo: dict, apiario_con_alveare: tuple) -> None:
     assert mai.id == trascurati[1]["id"]
 
 
+@pytest.mark.integration
+def test_q3_gli_alveari_di_un_apiario_disattivato_non_sono_da_controllare(
+    repo: dict, apiario_con_alveare: tuple, database_test: Database
+) -> None:
+    # Regressione: disattivare un apiario non spegne i suoi alveari (restano `attivo`), e Q3 li
+    # contava ancora come «da controllare», mentre Q1 non li conta fra gli attivi. La Home
+    # poteva mostrare più alveari da controllare che alveari attivi.
+    utente, apiario, mai_ispezionato = apiario_con_alveare
+    assert [r["id"] for r in repo["alveari"].trascurati(utente)] == [mai_ispezionato.id]
+
+    repo["apiari"].disattiva(utente, apiario.id)
+
+    assert repo["alveari"].trascurati(utente) == []
+    assert DashboardRepository(database_test).riepilogo(utente)["alveari_attivi"] == 0
+
+
 # --------------------------------------------------------------------------- #
 # Ispezioni
 # --------------------------------------------------------------------------- #
@@ -432,7 +448,7 @@ def test_eliminare_unispezione(repo: dict, apiario_con_alveare: tuple) -> None:
     )
     repo["ispezioni"].elimina(utente, ispezione.id)
     assert repo["ispezioni"].ispezioni_per_alveare(utente, alveare.id) == []
-    with pytest.raises(ValidationError, match="non trovato"):
+    with pytest.raises(ValidationError, match=r"^Ispezione non trovata\.$"):  # non «trovato»
         repo["ispezioni"].elimina(utente, ispezione.id)
 
 

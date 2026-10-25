@@ -7,7 +7,10 @@ handler — quindi le righe di log — a ogni click dell'utente.
 
 from __future__ import annotations
 
+import codecs
+import io
 import logging
+import sys
 from pathlib import Path
 
 import pytest
@@ -379,3 +382,65 @@ def test_configura_azzera_configura_il_log_e_catturabile(caplog, capsys) -> None
     caplog.clear()
     figlio.warning("dopo il secondo azzera")
     assert "dopo il secondo azzera" in caplog.text
+
+
+# --------------------------------------------------------------------------- #
+# Uscita in UTF-8 (Windows con l'uscita rediretta su file)
+# --------------------------------------------------------------------------- #
+
+
+def flusso_cp1252() -> io.TextIOWrapper:
+    """Com'è `sys.stdout` su Windows quando l'uscita va su file o in una pipe."""
+    return io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+
+
+def test_senza_prepara_console_un_carattere_come_la_freccia_fa_fallire_la_stampa() -> None:
+    # La premessa del difetto: con cp1252 «→» non si può scrivere.
+    with pytest.raises(UnicodeEncodeError):
+        print("token 812 → 164", file=flusso_cp1252(), flush=True)
+
+
+def test_prepara_console_porta_stdout_e_stderr_in_utf8(monkeypatch) -> None:
+    uscita, errori = flusso_cp1252(), flusso_cp1252()
+    monkeypatch.setattr(sys, "stdout", uscita)
+    monkeypatch.setattr(sys, "stderr", errori)
+
+    logging_config.prepara_console()
+    print("DA-05: MAE 3,5 → soddisfatto, R² 0,62")
+    print("errore → riprova", file=sys.stderr)
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    # splitlines: su Windows il flusso scrive «\r\n»
+    righe = uscita.buffer.getvalue().decode("utf-8").splitlines()
+    assert righe == ["DA-05: MAE 3,5 → soddisfatto, R² 0,62"]
+    assert errori.buffer.getvalue().decode("utf-8").splitlines() == ["errore → riprova"]
+
+
+def test_configura_prepara_la_console_prima_di_tutto(monkeypatch) -> None:
+    # Anche quando la configurazione fallisce lo script deve poter stampare il motivo.
+    uscita = flusso_cp1252()
+    monkeypatch.setattr(sys, "stdout", uscita)
+    with pytest.raises(ConfigError):
+        configura(livello="CHIACCHIERONE", su_file=False)
+    assert codecs.lookup(sys.stdout.encoding).name == "utf-8"
+
+
+def test_le_righe_di_log_con_caratteri_non_latini_arrivano_intere(monkeypatch) -> None:
+    uscita = flusso_cp1252()
+    monkeypatch.setattr(sys, "stdout", uscita)
+    configura(livello="INFO", su_file=False)
+    ottieni_logger("beewatch.prova").info("LLM ollama/m: 10 ms, token 812→164")
+    sys.stdout.flush()
+    assert "token 812→164" in uscita.buffer.getvalue().decode("utf-8")
+
+
+def test_un_flusso_gia_utf8_o_non_riconfigurabile_non_si_tocca(monkeypatch) -> None:
+    class SenzaReconfigure(io.StringIO):
+        encoding = "cp1252"
+
+    gia_utf8 = io.TextIOWrapper(io.BytesIO(), encoding="utf-8", errors="strict")
+    monkeypatch.setattr(sys, "stdout", gia_utf8)
+    monkeypatch.setattr(sys, "stderr", SenzaReconfigure())
+    logging_config.prepara_console()  # non solleva
+    assert sys.stdout.errors == "strict"  # non riconfigurato: era già UTF-8
