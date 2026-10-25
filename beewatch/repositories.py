@@ -1,33 +1,26 @@
 """Repository: l'unico posto del progetto che contiene SQL.
 
-Ogni classe riceve un `Database` e offre metodi dal nome di dominio
-(`trova_alveari_attivi`, `ispezioni_per_alveare`, `serie_storica_stato`...).
-Chi li usa (servizi, ETL, training) non scrive query e non vede il driver.
+Ogni classe riceve un `Database` e offre metodi dal nome di dominio (`trova_alveari_attivi`,
+`ispezioni_per_alveare`, `serie_storica_stato`...). Chi li usa (servizi, ETL, training) non scrive
+query e non vede il driver.
 
 Regole che valgono per tutte le query:
 
-- **parametri sempre con `%s`**, mai testo concatenato: l'iniezione SQL non ha
-  un punto d'ingresso;
-- **ogni dato operativo è filtrato per `utente_id`** (decisione D2 di M2-T4): un
-  utente non può leggere né modificare ciò che non è suo. Un id che non esiste e
-  un id di un altro utente danno lo stesso errore, così non si scopre nemmeno
-  che esiste;
+- **parametri sempre con `%s`**, mai testo concatenato: l'iniezione SQL non ha un punto d'ingresso;
+- **ogni dato operativo è filtrato per `utente_id`** (decisione D2 di M2-T4): un utente non può
+  leggere né modificare ciò che non è suo. Un id che non esiste e un id di un altro utente danno
+  lo stesso errore, così non si scopre nemmeno che esiste;
 - **apiari e alveari si disattivano, non si cancellano** (D7);
-- **un metodo, una transazione**: i controlli e la scrittura che li segue stanno
-  nella stessa transazione.
+- **un metodo, una transazione**: i controlli e la scrittura che li segue stanno nella stessa
+  transazione.
 
-Le query Q1–Q11 sono quelle progettate e motivate in
-`docs/markdown/M2-dati/M2-T4_schema.md`. Il passaggio fra il `codice` dei valori
-fissi (gli Enum di `models.py`) e l'`id` numerico del database avviene qui, con
-una sottoquery sulla tabella di riferimento.
+Le query Q1–Q11 sono quelle progettate e motivate in `docs/markdown/M2-dati/M2-T4_schema.md`. Il
+passaggio fra il `codice` dei valori fissi (gli Enum di `models.py`) e l'`id` numerico del database
+avviene qui, con una sottoquery sulla tabella di riferimento. Le entità tornano come oggetti di
+`models.py`; i riepiloghi per le schermate come dizionari, una chiave per colonna.
 
-Le entità tornano come oggetti di `models.py`; i riepiloghi per le schermate
-come dizionari, una chiave per colonna.
-
-Questo file gestisce i dati dell'apicoltore (apiari, alveari, ispezioni,
-raccolti). Dashboard, cancellazione dell'utente, riferimento USDA, previsioni e
-conversazioni sono in `repositories_riferimento.py`: un file solo avrebbe
-superato le 400 righe che il backlog fissa come limite.
+Questo file ha i dati dell'apicoltore (apiari, alveari, ispezioni, raccolti); il resto è in
+`repositories_riferimento.py`: il backlog fissa 400 righe per file.
 """
 
 from __future__ import annotations
@@ -76,6 +69,10 @@ def _con_id(entita: Any) -> int:
 
 
 # Controlli di appartenenza riusati da più repository.
+_ISPEZIONE_DELL_UTENTE = (
+    "SELECT 1 FROM ispezioni i JOIN alveari al ON al.id = i.alveare_id "
+    "JOIN apiari ap ON ap.id = al.apiario_id WHERE i.id = %s AND ap.utente_id = %s"
+)
 _APIARIO_DELL_UTENTE = "SELECT 1 FROM apiari WHERE id = %s AND utente_id = %s"
 _ALVEARE_DELL_UTENTE = (
     "SELECT 1 FROM alveari al JOIN apiari ap ON ap.id = al.apiario_id "
@@ -268,6 +265,15 @@ def _ispezione(riga: Riga) -> Ispezione:
     return Ispezione(**{**riga, **booleani})
 
 
+_SELECT_ISPEZIONE = (
+    "SELECT i.id, i.alveare_id, i.data_ispezione, lr.codice AS livello_rischio, "
+    "i.peso_kg, i.telaini_covata, i.telaini_scorte, i.regina_vista, i.sciamatura, i.note "
+    "FROM ispezioni i JOIN alveari al ON al.id = i.alveare_id "
+    "JOIN apiari ap ON ap.id = al.apiario_id "
+    "JOIN livelli_rischio lr ON lr.id = i.livello_rischio_id "
+)
+
+
 class IspezioniRepository(_Repository):
     def crea(self, utente_id: int, ispezione: Ispezione) -> Ispezione:
         with self._db.transazione() as cursore:
@@ -285,15 +291,16 @@ class IspezioniRepository(_Repository):
             nuovo_id = cursore.lastrowid
         return Ispezione(**{**ispezione.__dict__, "id": nuovo_id})
 
+    def trova(self, utente_id: int, ispezione_id: int) -> Ispezione | None:
+        """Un'ispezione dell'utente (un id altrui e uno inesistente danno lo stesso None)."""
+        righe = self._righe(_SELECT_ISPEZIONE + "WHERE i.id = %s AND ap.utente_id = %s",
+                            (ispezione_id, utente_id))  # fmt: skip
+        return _ispezione(righe[0]) if righe else None
+
     def ispezioni_per_alveare(self, utente_id: int, alveare_id: int) -> list[Ispezione]:
         """Le ispezioni di un alveare, dalla più recente."""
         righe = self._righe(
-            "SELECT i.id, i.alveare_id, i.data_ispezione, lr.codice AS livello_rischio, "
-            "i.peso_kg, i.telaini_covata, i.telaini_scorte, i.regina_vista, i.sciamatura, i.note "
-            "FROM ispezioni i JOIN alveari al ON al.id = i.alveare_id "
-            "JOIN apiari ap ON ap.id = al.apiario_id "
-            "JOIN livelli_rischio lr ON lr.id = i.livello_rischio_id "
-            "WHERE i.alveare_id = %s AND ap.utente_id = %s "
+            _SELECT_ISPEZIONE + "WHERE i.alveare_id = %s AND ap.utente_id = %s "
             "ORDER BY i.data_ispezione DESC, i.id DESC",
             (alveare_id, utente_id),
         )
@@ -324,13 +331,8 @@ class IspezioniRepository(_Repository):
 
     def elimina(self, utente_id: int, ispezione_id: int) -> None:
         with self._db.transazione() as cursore:
-            _richiedi(
-                cursore,
-                "SELECT 1 FROM ispezioni i JOIN alveari al ON al.id = i.alveare_id "
-                "JOIN apiari ap ON ap.id = al.apiario_id WHERE i.id = %s AND ap.utente_id = %s",
-                (ispezione_id, utente_id),
-                _non_trovato("Ispezione", "id"),
-            )
+            _richiedi(cursore, _ISPEZIONE_DELL_UTENTE, (ispezione_id, utente_id),
+                      _non_trovato("Ispezione", "id"))  # fmt: skip
             cursore.execute("DELETE FROM ispezioni WHERE id = %s", (ispezione_id,))
 
 

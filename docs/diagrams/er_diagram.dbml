@@ -354,6 +354,49 @@ Table messaggi [headercolor: #8B72C8] {
   '''
 }
 
+Enum stato_salute_riepilogo {
+  buono
+  attenzione
+  critico
+  non_determinabile
+}
+
+Enum confidenza_riepilogo {
+  alta
+  media
+  bassa
+}
+
+Table riepiloghi_ispezione [headercolor: #8B72C8] {
+  id              int                   [pk, increment]
+  ispezione_id    int                   [not null]
+  utente_id       int                   [not null]
+  stato_salute    stato_salute_riepilogo [not null]
+  confidenza      confidenza_riepilogo  [not null]
+  riepilogo_json  json                  [not null, note: 'Il riepilogo validato (schema di M5-T3)']
+  provider        varchar(20)           [not null]
+  modello         varchar(60)           [not null]
+  versione_prompt varchar(20)           [not null]
+  durata_ms       int                   [not null, note: 'Somma delle chiamate, tentativo correttivo compreso']
+  token_prompt    int                   [note: 'NULL se il provider non li dichiara']
+  token_risposta  int
+  tentativi       tinyint               [not null, default: 1, note: '2 = e\' servito il tentativo correttivo']
+  creato_il       datetime              [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (ispezione_id, creato_il) [name: 'idx_riepiloghi_ispezione_data']
+    (utente_id, creato_il) [name: 'idx_riepiloghi_utente_data']
+  }
+  Note: '''
+    Aggiunta in M5-T5 (DA-03, sql/schema_03_riepiloghi_ispezione.sql).
+    Un riepilogo appartiene a un'ispezione e ha una struttura: stato e
+    confidenza stanno in colonne proprie per poterli filtrare, il resto nel JSON.
+    Piu' riepiloghi per ispezione: rigenerare non cancella il precedente.
+    Contiene il contenuto delle note, quindi sparisce con l'ispezione e con
+    l'utente. CHECK: tentativi tra 1 e 2.
+  '''
+}
+
 // --------------------------------------------------------------------------- //
 // Relazioni
 // --------------------------------------------------------------------------- //
@@ -387,6 +430,8 @@ Ref: previsioni.versione_modello > modelli.versione [delete: restrict, update: c
 
 Ref: conversazioni.utente_id > utenti.id [delete: cascade, update: restrict]
 Ref: messaggi.conversazione_id > conversazioni.id [delete: cascade, update: restrict]
+Ref: riepiloghi_ispezione.ispezione_id > ispezioni.id [delete: cascade, update: restrict]
+Ref: riepiloghi_ispezione.utente_id > utenti.id [delete: cascade, update: restrict]
 
 // --------------------------------------------------------------------------- //
 // Raggruppamenti (colorano i riquadri nel diagramma)
@@ -419,6 +464,7 @@ TableGroup tracciabilita [color: #8B72C8] {
   previsioni
   conversazioni
   messaggi
+  riepiloghi_ispezione
 }
 
 // =========================================================================== //

@@ -33,11 +33,11 @@ def come_root(stack: Stack, sql: str, database: str = NOME_DB_TEST) -> str:
     return esito.stdout.strip()
 
 
-def applica_estensione(stack: Stack, database: str = NOME_DB_TEST) -> None:
+def applica_estensione(stack: Stack, database: str = NOME_DB_TEST, file: str = ESTENSIONE) -> None:
     """Applica il file dell'estensione come l'operatore (il file è montato nel contenitore)."""
     comando = (
         'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot '
-        f"--database={database} < /docker-entrypoint-initdb.d/{ESTENSIONE}"
+        f"--database={database} < /docker-entrypoint-initdb.d/{file}"
     )
     esito = stack.nel_container("mysql", "sh", "-c", comando)
     assert esito.returncode == 0, stack.redigi(esito.stderr + esito.stdout)
@@ -114,3 +114,77 @@ def test_lo_script_del_db_di_test_applica_anche_le_estensioni() -> None:
     assert "schema_*.sql" in corpo  # le estensioni, in ordine alfabetico
     # Prima lo schema, poi le estensioni, poi il seed.
     assert corpo.index("(schema.sql)") < corpo.index("schema_*.sql") < corpo.index("+=(seed.sql)")
+
+
+# --------------------------------------------------------------------------- #
+# schema_03: la tabella dei riepiloghi AI (M5-T5)
+# --------------------------------------------------------------------------- #
+
+ESTENSIONE_RIEPILOGHI = "schema_03_riepiloghi_ispezione.sql"
+
+
+def tabella_riepiloghi(stack: Stack, database: str) -> str:
+    return come_root(
+        stack,
+        "SELECT table_name FROM information_schema.tables "
+        f"WHERE table_schema = '{database}' AND table_name = 'riepiloghi_ispezione'",
+        database,
+    )
+
+
+@pytest.fixture
+def stack_riepiloghi(stack_mysql: Stack) -> Iterator[Stack]:
+    """Lo stack; a fine test la tabella c'è di nuovo, qualunque cosa abbia fatto il test."""
+    yield stack_mysql
+    applica_estensione(stack_mysql, file=ESTENSIONE_RIEPILOGHI)
+
+
+def test_la_tabella_dei_riepiloghi_c_e_nel_database_principale_e_in_quello_di_test(
+    stack_riepiloghi: Stack,
+) -> None:
+    for database in (DB_NAME, NOME_DB_TEST):
+        assert tabella_riepiloghi(stack_riepiloghi, database) == "riepiloghi_ispezione", database
+
+
+def test_riapplicare_la_tabella_dei_riepiloghi_non_cambia_nulla(stack_riepiloghi: Stack) -> None:
+    prima = come_root(stack_riepiloghi, "SHOW CREATE TABLE riepiloghi_ispezione")
+
+    applica_estensione(stack_riepiloghi, file=ESTENSIONE_RIEPILOGHI)
+    applica_estensione(stack_riepiloghi, file=ESTENSIONE_RIEPILOGHI)
+
+    assert come_root(stack_riepiloghi, "SHOW CREATE TABLE riepiloghi_ispezione") == prima
+
+
+def test_su_un_database_senza_la_tabella_lestensione_la_crea_senza_toccare_il_resto(
+    stack_riepiloghi: Stack,
+) -> None:
+    ispezioni = come_root(stack_riepiloghi, "SELECT COUNT(*) FROM ispezioni")
+    come_root(
+        stack_riepiloghi, "DROP TABLE riepiloghi_ispezione"
+    )  # il volume com'era prima di M5-T5
+    assert tabella_riepiloghi(stack_riepiloghi, NOME_DB_TEST) == ""
+
+    applica_estensione(stack_riepiloghi, file=ESTENSIONE_RIEPILOGHI)
+
+    assert tabella_riepiloghi(stack_riepiloghi, NOME_DB_TEST) == "riepiloghi_ispezione"
+    assert come_root(stack_riepiloghi, "SELECT COUNT(*) FROM ispezioni") == ispezioni
+
+
+def test_la_tabella_dei_riepiloghi_ha_cascate_e_vincoli_attesi(stack_riepiloghi: Stack) -> None:
+    chiavi = come_root(
+        stack_riepiloghi,
+        "SELECT CONCAT(constraint_name, ' ', delete_rule) "
+        "FROM information_schema.referential_constraints "
+        f"WHERE constraint_schema = '{NOME_DB_TEST}' AND table_name = 'riepiloghi_ispezione' "
+        "ORDER BY constraint_name",
+    )
+    assert chiavi.splitlines() == [
+        "fk_riepiloghi_ispezioni CASCADE",
+        "fk_riepiloghi_utenti CASCADE",
+    ]
+
+
+def test_il_file_dei_riepiloghi_si_ordina_dopo_lo_schema_e_prima_del_seed() -> None:
+    nomi = sorted(p.name for p in (RADICE / "sql").glob("*.sql"))
+    assert nomi.index("schema.sql") < nomi.index(ESTENSIONE_RIEPILOGHI) < nomi.index("seed.sql")
+    assert nomi.index(ESTENSIONE) < nomi.index(ESTENSIONE_RIEPILOGHI)

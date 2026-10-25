@@ -30,6 +30,7 @@ class LLMFinto(LLMClient):
     """
 
     provider = "finto"
+    in_locale = True
 
     def __init__(
         self,

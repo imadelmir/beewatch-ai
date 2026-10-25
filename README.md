@@ -33,7 +33,7 @@ conversazionale che può girare interamente sul tuo computer.
 |---|---|
 | **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
 | **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza, accesso ai dati (transazioni, repository) ed ETL del dataset USDA |
-| **Risultato finora** | 3 milestone su 8 chiuse, 1018 test automatici (901 rapidi + 117 con MySQL in Docker), CI verde |
+| **Risultato finora** | 3 milestone su 8 chiuse, 1087 test automatici (947 rapidi + 140 con MySQL in Docker), CI verde |
 | **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
 | **Demo** | Non ancora: l'interfaccia e la milestone M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
 | **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
@@ -174,6 +174,9 @@ docker compose exec -T mysql sh -c \
   'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --database="$MYSQL_DATABASE"' \
   < sql/schema_02_previsioni_feature_json.sql
 ```
+
+e, per la tabella dei riepiloghi AI delle ispezioni (M5-T5), lo stesso comando con
+`sql/schema_03_riepiloghi_ispezione.sql`.
 
 Se manca una modifica, l'applicazione lo dice con un messaggio che rimanda a questo comando.
 
