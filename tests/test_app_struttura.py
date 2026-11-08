@@ -125,7 +125,6 @@ def test_il_punto_di_ingresso_e_home_py_e_main_py_non_esiste_piu():
 
 @pytest.mark.parametrize("pagina", SEI_PAGINE)
 def test_ogni_pagina_parte_con_avvia(pagina):
-    sorgente = (PAGINE / pagina).read_text(encoding="utf-8")
     corpo = [
         n for n in albero(PAGINE / pagina).body if not isinstance(n, ast.Import | ast.ImportFrom)
     ]
@@ -135,7 +134,7 @@ def test_ogni_pagina_parte_con_avvia(pagina):
     prima = corpo[0]
     assert isinstance(prima, ast.Expr) and isinstance(prima.value, ast.Call), pagina
     assert prima.value.func.id == "avvia", pagina  # il primo comando è l'avvio comune
-    assert "from avvio import avvia" in sorgente
+    assert "avvio.avvia" in moduli_importati(PAGINE / pagina)
 
 
 def test_nessun_riferimento_a_app_main_py_resta_nei_file_di_lavoro():
@@ -180,7 +179,10 @@ def test_il_client_del_modello_di_linguaggio_non_si_importa_nemmeno_per_nome():
 
 
 def test_le_pagine_chiamano_i_servizi_non_il_resto_di_beewatch():
+    # `beewatch.models` solo per gli Enum del dominio (StatoAlveare in `ui.badge_stato`): il modulo
+    # non importa database né modello.
     consentiti = {
+        "beewatch.models",
         "beewatch.services",
         "beewatch.exceptions",
         "beewatch.logging_config",
@@ -203,12 +205,24 @@ def test_nessun_sql_nei_file_di_app():
         ), percorso
 
 
-def test_nessun_css_ne_html_iniettato():
-    # Specifica §2 e §13: il tema è nativo. L'unica eccezione (badge_stato, M6-T2) non c'è ancora.
+def test_nessun_css_ne_html_iniettato_fuori_da_badge_stato():
+    # Specifica §2, §11 e §13: il tema è nativo; l'unica eccezione è `ui.badge_stato` (M6-T2).
     for percorso in FILE_APP:
         testo = percorso.read_text(encoding="utf-8")
-        assert "unsafe_allow_html" not in testo, percorso
         assert "<style" not in testo.lower(), percorso
+        assert "st.html(" not in testo and "components.html" not in testo, percorso
+        if percorso.name != "ui.py":
+            assert "unsafe_allow_html" not in testo, percorso
+
+    usi = []
+    for funzione in ast.walk(albero(APP / "ui.py")):
+        if isinstance(funzione, ast.FunctionDef):
+            usi += [
+                funzione.name
+                for nodo in ast.walk(funzione)
+                if isinstance(nodo, ast.keyword) and nodo.arg == "unsafe_allow_html"
+            ]
+    assert usi == ["badge_stato"]
 
 
 def test_home_non_definisce_funzioni_ne_classi_ne_cicli():

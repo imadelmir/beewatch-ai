@@ -13,108 +13,25 @@ Non prova l'aspetto grafico né il menu laterale (li costruisce Streamlit): vedi
 from __future__ import annotations
 
 import logging
-import sys
-from decimal import Decimal
-from pathlib import Path
 
 import pytest
-import streamlit as st
+from app_finta import (
+    APP,
+    PAGINE,
+    RADICE,
+    ApiariFinti,
+    DashboardFinto,
+    esegui,
+    installa,
+    servizi_finti,
+    valori,
+)
 from streamlit.testing.v1 import AppTest
 
 from beewatch.exceptions import ConfigError, DatabaseError, ModelError
 from beewatch.ml.predictor import Predittore
-from beewatch.models import Apiario
-from beewatch.services import Servizi
 
-RADICE = Path(__file__).resolve().parents[1]
-APP = RADICE / "app"
 MODELLO_COMMITTATO = RADICE / "models" / "produzione_v1.joblib"
-PAGINE = sorted((APP / "pages").glob("*.py"))
-
-
-class DashboardFinto:
-    def __init__(self, errore: Exception | None = None):
-        self.chiamate = 0
-        self.errore = errore
-
-    def riepilogo(self, utente_id: int) -> dict:
-        self.chiamate += 1
-        if self.errore:
-            raise self.errore
-        return {
-            "alveari_attivi": 4,
-            "ispezioni_30_giorni": 7,
-            "produzione_stagione_kg": Decimal("1234.50"),
-        }
-
-
-class ApiariFinti:
-    def __init__(self, nomi: tuple[str, ...] = ("Collina", "Valle")):
-        self.nomi = nomi
-
-    def elenca(self, utente_id: int) -> list[Apiario]:
-        return [Apiario(utente_id=utente_id, nome=n, id=10 + i) for i, n in enumerate(self.nomi)]
-
-
-class AlveariFinti:
-    def trascurati(self, utente_id: int) -> list[dict]:
-        return [{"id": 3, "codice": "A3"}, {"id": 5, "codice": "B1"}]
-
-
-class PredittoreStub:
-    versione = "v-stub"
-    metadati = {
-        "algoritmo": "RandomForestRegressor",
-        "metriche": {"hold_out_2010_2012": {"mae_kg": 3.499}},
-        "addestrato_il": "2026-10-23T12:00:00+00:00",
-        "addestramento": {"righe": 600},
-    }
-
-
-@pytest.fixture
-def app_pronta(monkeypatch: pytest.MonkeyPatch):
-    """`app/` nel percorso degli import (lo fa `streamlit run`, non AppTest) e cache pulite."""
-    monkeypatch.syspath_prepend(str(APP))
-    sys.modules.pop("avvio", None)
-    import avvio
-
-    st.cache_resource.clear()
-    st.cache_data.clear()
-    monkeypatch.setattr(avvio, "configura", lambda: None)  # il logging vero legge il .env
-    yield avvio
-    st.cache_resource.clear()
-    st.cache_data.clear()
-    sys.modules.pop("avvio", None)
-
-
-def servizi_finti(
-    dashboard: DashboardFinto | None = None,
-    apiari: ApiariFinti | None = None,
-    crea_predittore=PredittoreStub,
-) -> Servizi:
-    return Servizi(
-        None,
-        crea_predittore=crea_predittore,
-        dashboard=dashboard or DashboardFinto(),
-        apiari=apiari or ApiariFinti(),
-        alveari=AlveariFinti(),
-        descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
-    )
-
-
-def installa(avvio, monkeypatch, servizi: Servizi) -> list[int]:
-    """Fa creare ad `avvio` questi servizi; restituisce un contatore delle creazioni."""
-    create: list[int] = []
-    monkeypatch.setattr(avvio, "crea_servizi", lambda: create.append(1) or servizi)
-    return create
-
-
-def esegui(file: Path) -> AppTest:
-    return AppTest.from_file(str(file), default_timeout=30).run()
-
-
-def valori(elementi) -> list[str]:
-    return [str(e.value) for e in elementi]
 
 
 # --------------------------------------------------------------------------- #
@@ -189,8 +106,10 @@ def test_se_il_database_non_risponde_la_home_lo_dice_senza_traceback(app_pronta,
     at = esegui(APP / "Home.py")
 
     assert not at.exception
-    assert valori(at.error) == ["Non riesco a leggere i dati."]
-    assert "docker compose up -d mysql" in valori(at.code)[0]
+    [testo] = valori(at.error)  # tradotto da ui.mostra_errore: cosa è successo e cosa fare
+    assert testo.startswith("**Non riesco a raggiungere il database.**")
+    assert "Il server MySQL non risponde" in testo and "docker compose up -d mysql" in testo
+    assert not at.code  # nessun dettaglio tecnico a schermo
     assert not at.metric  # niente numeri inventati
 
 
@@ -203,9 +122,12 @@ def test_se_la_configurazione_non_e_valida_lapp_si_ferma_con_il_motivo(app_pront
     at = esegui(APP / "Home.py")
 
     assert not at.exception
-    assert valori(at.error) == ["L'applicazione non può partire."]
-    assert "manca DB_NAME" in valori(at.code)[0]
+    assert "L'applicazione non può partire." in valori(at.markdown)
+    [testo] = valori(at.error)
+    assert testo.startswith("**La configurazione non è valida.**")
+    assert "manca DB_NAME" in testo and "`.env`" in testo
     assert not at.metric
+    assert not at.sidebar.selectbox  # la pagina si è fermata prima della sidebar
 
 
 def test_senza_il_file_del_modello_la_home_funziona_e_avvisa(app_pronta, monkeypatch):

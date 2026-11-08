@@ -18,7 +18,7 @@ importano il livello dati, `joblib` né il client del modello di linguaggio (reg
 specifica, §2).
 
 Gli helper visivi condivisi (intestazione, sidebar, banner AI, metriche…) sono un'altra cosa:
-stanno in `app/ui.py` e arrivano con M6-T2.
+stanno in `app/ui.py` (M6-T2), che legge da qui risorse, letture e stato.
 """
 
 from __future__ import annotations
@@ -42,6 +42,10 @@ TTL_LETTURE_SECONDI = 60
 
 CHIAVE_UTENTE = "utente_id"
 CHIAVE_APIARIO_ATTIVO = "apiario_attivo_id"
+# La chiave del selettore nella sidebar. È distinta da CHIAVE_APIARIO_ATTIVO perché Streamlit
+# dimentica lo stato di un widget quando si cambia pagina: la scelta vera vive nella chiave non
+# legata a widget, e il selettore la ricopia a ogni esecuzione (vedi `prepara_selettore_apiario`).
+CHIAVE_SELETTORE_APIARIO = "selettore_apiario"
 
 
 # --------------------------------------------------------------------------- #
@@ -81,6 +85,12 @@ def panoramica(utente_id: int) -> Panoramica:
     return servizi().panoramica(utente_id)
 
 
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def apiari(utente_id: int) -> tuple[ApiarioScelta, ...]:
+    """Gli apiari tra cui scegliere quello attivo (sola lettura, `TTL_LETTURE_SECONDI`)."""
+    return tuple(servizi().elenca_apiari(utente_id))
+
+
 def svuota_letture() -> None:
     """Dimentica tutte le letture in cache: da chiamare subito dopo una scrittura."""
     st.cache_data.clear()
@@ -115,6 +125,21 @@ def apiario_attivo(apiari: tuple[ApiarioScelta, ...]) -> ApiarioScelta | None:
     return next((a for a in apiari if a.id == attivo), None)
 
 
+def prepara_selettore_apiario() -> None:
+    """Porta nel selettore della sidebar l'apiario attivo, prima di disegnarlo.
+
+    Va chiamata a ogni esecuzione, prima di `st.selectbox(key=CHIAVE_SELETTORE_APIARIO)`: così il
+    selettore mostra la scelta fatta su un'altra pagina anche se Streamlit ha dimenticato il
+    widget nel cambio di pagina.
+    """
+    st.session_state[CHIAVE_SELETTORE_APIARIO] = st.session_state[CHIAVE_APIARIO_ATTIVO]
+
+
+def al_cambio_apiario() -> None:
+    """Callback del selettore: la scelta dell'utente diventa l'apiario attivo di tutte le pagine."""
+    st.session_state[CHIAVE_APIARIO_ATTIVO] = st.session_state[CHIAVE_SELETTORE_APIARIO]
+
+
 # --------------------------------------------------------------------------- #
 # Prima riga di ogni pagina
 # --------------------------------------------------------------------------- #
@@ -132,6 +157,10 @@ def avvia(titolo: str, icona: str = "🐝") -> Servizi:
     try:
         return servizi()
     except BeeWatchError as errore:
-        st.error("L'applicazione non può partire.")
-        st.code(str(errore), language="text")
+        # Import qui e non in cima: `ui` importa `avvio`, e il contrario in cima sarebbe un ciclo.
+        from ui import mostra_errore
+
+        st.title("🐝 BeeWatch AI")
+        st.write("L'applicazione non può partire.")
+        mostra_errore(errore)
         st.stop()
