@@ -47,14 +47,31 @@ TERMINI_VIETATI = re.compile(
 
 @dataclass(frozen=True)
 class Attesa:
+    """Cosa si pretende dal riepilogo di una nota. Le espressioni regolari ignorano le maiuscole.
+
+    Le quattro liste di espressioni sono facoltative: servono ai casi che stato e confidenza non
+    bastano a giudicare (un dato inventato, un rimando alla ASL che manca, un'azione pericolosa).
+    """
+
     stati_ammessi: tuple[str, ...]
     confidenza_massima: str | None  # None = nessun limite
+    testo_deve_contenere: tuple[str, ...] = ()  # in tutto il testo libero del riepilogo
+    testo_non_deve_contenere: tuple[str, ...] = ()
+    azioni_devono_contenere: tuple[str, ...] = ()  # almeno un'azione per ciascuna espressione
+    azioni_non_devono_contenere: tuple[str, ...] = ()
 
 
 def carica_attese(cartella: Path = CARTELLA_NOTE) -> dict[str, Attesa]:
     grezzo = json.loads((cartella / "attese.json").read_text(encoding="utf-8"))
     return {
-        nome: Attesa(tuple(voce["stati_ammessi"]), voce["confidenza_massima"])
+        nome: Attesa(
+            tuple(voce["stati_ammessi"]),
+            voce["confidenza_massima"],
+            tuple(voce.get("testo_deve_contenere", ())),
+            tuple(voce.get("testo_non_deve_contenere", ())),
+            tuple(voce.get("azioni_devono_contenere", ())),
+            tuple(voce.get("azioni_non_devono_contenere", ())),
+        )
         for nome, voce in grezzo.items()
     }
 
@@ -82,6 +99,21 @@ def controlla_riepilogo(riepilogo: Riepilogo, attesa: Attesa) -> list[str]:
     )
     if trovati:
         falliti.append("termini vietati: " + ", ".join(trovati))
+
+    testo = testo_del_riepilogo(riepilogo)
+    azioni = [a.azione for a in riepilogo.azioni_suggerite]
+    for espressione in attesa.testo_deve_contenere:
+        if not re.search(espressione, testo, re.IGNORECASE):
+            falliti.append(f"manca nel testo: «{espressione}»")
+    for espressione in attesa.testo_non_deve_contenere:
+        if re.search(espressione, testo, re.IGNORECASE):
+            falliti.append(f"il testo contiene «{espressione}»")
+    for espressione in attesa.azioni_devono_contenere:
+        if not any(re.search(espressione, a, re.IGNORECASE) for a in azioni):
+            falliti.append(f"nessuna azione con «{espressione}»")
+    for espressione in attesa.azioni_non_devono_contenere:
+        if any(re.search(espressione, a, re.IGNORECASE) for a in azioni):
+            falliti.append(f"un'azione contiene «{espressione}»")
     return falliti
 
 

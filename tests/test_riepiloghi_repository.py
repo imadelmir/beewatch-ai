@@ -16,6 +16,7 @@ from datetime import date, timedelta
 import pytest
 from llm_fake import LLMFinto
 
+from beewatch.ai.prompt import versione_prompt
 from beewatch.database import Database
 from beewatch.exceptions import DatabaseError, ValidationError
 from beewatch.models import Alveare, Apiario, Ispezione, LivelloRischio, StatoAlveare
@@ -291,7 +292,7 @@ def test_servizio_intero_sulla_nota_lunga_di_a3_del_seed(
     riga = servizi.riepilogo_salvato(1, 12)
     assert riga["id"] == r.id and riga["riepilogo_json"] == RIEPILOGO
     assert (riga["provider"], riga["modello"]) == ("finto", "m-prova")
-    assert riga["versione_prompt"] == "v1" and riga["tentativi"] == 1
+    assert riga["versione_prompt"] == versione_prompt() and riga["tentativi"] == 1
 
     # Il contesto passato al modello viene dal database, ed è quello giusto.
     richiesta = client.chiamate[0].utente

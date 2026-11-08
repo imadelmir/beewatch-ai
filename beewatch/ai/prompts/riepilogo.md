@@ -1,4 +1,4 @@
-<!-- versione: v1 -->
+<!-- versione: v2 -->
 Riassumi l'ispezione seguente secondo le regole e il formato che conosci.
 
 ## Alveare
