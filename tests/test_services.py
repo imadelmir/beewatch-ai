@@ -574,3 +574,63 @@ def test_integrazione_due_previsioni_non_registrano_due_volte_il_modello(
         cursore.execute("SELECT COUNT(*) AS n FROM modelli")
         assert cursore.fetchone()["n"] == 1
     assert len(PrevisioniRepository(database_test).ultime_previsioni(1)) == 2
+
+
+# --------------------------------------------------------------------------- #
+# M6-T5: storico per alveare e parametri a mano, con MySQL e il modello vero
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.integration
+def test_integrazione_lo_storico_si_restringe_a_un_alveare(
+    servizi_veri: Servizi, database_test: Database
+) -> None:
+    primo, secondo = AlveariRepository(database_test).trova_alveari_attivi(1)[:2]
+    a = servizi_veri.prevedi_produzione(1, primo.id, "CA", 2013)
+    servizi_veri.prevedi_produzione(1, None, "ND", 2013)
+    c = servizi_veri.prevedi_produzione(1, primo.id, "ND", 2010)
+
+    del_primo = servizi_veri.storico_previsioni(1, alveare_id=primo.id)
+
+    assert [r["id"] for r in del_primo] == [c.id, a.id]
+    assert {r["alveare_id"] for r in del_primo} == {primo.id}
+    assert all(r["alveare"] == primo.codice for r in del_primo)
+    assert servizi_veri.storico_previsioni(1, alveare_id=secondo.id) == []
+    assert len(servizi_veri.storico_previsioni(1)) == 3  # senza filtro, tutte
+
+
+@pytest.mark.integration
+def test_integrazione_i_parametri_a_mano_danno_la_stessa_stima_dei_dati(
+    servizi_veri: Servizi, database_test: Database
+) -> None:
+    dai_dati = servizi_veri.prevedi_produzione(1, None, "CA", 2013)
+    parametri = {
+        nome: dai_dati.feature[nome]
+        for nome in ("resa_anno_prima", "resa_media_3_anni_prima", "colonie_anno_prima")
+    }
+
+    a_mano = servizi_veri.prevedi_con_parametri(1, "CA", 2013, **parametri)
+
+    # Stessi valori, stesso modello: stessa stima. Ma la simulazione non si salva.
+    assert (a_mano.stima_kg, a_mano.limite_inferiore_kg, a_mano.limite_superiore_kg) == (
+        dai_dati.stima_kg, dai_dati.limite_inferiore_kg, dai_dati.limite_superiore_kg,
+    )  # fmt: skip
+    assert a_mano.parametri_manuali and a_mano.id is None
+    assert [r["id"] for r in PrevisioniRepository(database_test).ultime_previsioni(1)] == [
+        dai_dati.id
+    ]
+
+
+@pytest.mark.integration
+def test_integrazione_gli_intervalli_vengono_dal_pannello_vero(servizi_veri: Servizi) -> None:
+    resa, media, colonie = servizi_veri.intervalli_parametri()
+
+    assert 0 < resa.minimo < 20 < 60 < resa.massimo < 120  # kg per colonia, 40 stati in 15 anni
+    assert (media.minimo, media.massimo) == (resa.minimo, resa.massimo)
+    assert colonie.minimo >= 1000 and colonie.massimo > 100_000
+    with pytest.raises(ValidationError, match="non sa stimare") as errore:
+        servizi_veri.prevedi_con_parametri(
+            1, "CA", 2013, resa_anno_prima=resa.massimo + 1,
+            resa_media_3_anni_prima=resa.minimo, colonie_anno_prima=colonie.minimo,
+        )  # fmt: skip
+    assert errore.value.campo == "resa_anno_prima"

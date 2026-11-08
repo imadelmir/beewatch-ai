@@ -33,10 +33,12 @@ from beewatch.models import Apiario
 from beewatch.services import (
     AlveareInElenco,
     ApiarioScelta,
+    IntervalloParametro,
     IspezioneInElenco,
     Panoramica,
     Servizi,
     StatoModello,
+    StatoPrevedibile,
     crea_servizi,
 )
 
@@ -131,6 +133,24 @@ def ispezioni_dell_apiario(
             utente_id, apiario_id, alveare_id=alveare_id, dal=dal, al=al
         )
     )
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def stati_prevedibili() -> tuple[StatoPrevedibile, ...]:
+    """Gli stati per cui il modello può prevedere, con i loro anni (sola lettura, in cache)."""
+    return tuple(servizi().stati_prevedibili())
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def intervalli_parametri() -> tuple[IntervalloParametro, ...]:
+    """Gli intervalli ammessi per i parametri scritti a mano (sola lettura, in cache)."""
+    return servizi().intervalli_parametri()
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def storico_previsioni(utente_id: int, alveare_id: int | None = None) -> tuple[dict, ...]:
+    """Le ultime previsioni salvate, di tutti gli alveari o di uno (sola lettura, in cache)."""
+    return tuple(servizi().storico_previsioni(utente_id, alveare_id=alveare_id))
 
 
 def svuota_letture() -> None:

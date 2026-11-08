@@ -697,7 +697,7 @@ def test_ogni_pagina_regge_il_database_spento(app_pronta, monkeypatch, pagina):
         [errore] = valori(at.error)
         assert errore.startswith("**Non riesco a raggiungere il database.**")
         assert not at.metric  # niente numeri inventati
-    else:  # Previsione e Trasparenza leggono solo il modello
+    else:  # Previsione non dipende dagli apiari, Trasparenza legge solo il modello
         assert not at.error
 
 

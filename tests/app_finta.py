@@ -16,6 +16,7 @@ from types import ModuleType
 
 import pytest
 import streamlit as st
+from previsione_finta import ModelliFinti, PrevisioniInMemoria, ProduzioneFinta
 from streamlit.testing.v1 import AppTest
 
 from beewatch.models import Alveare, Apiario, Ispezione, LivelloRischio, StatoAlveare
@@ -135,6 +136,9 @@ def servizi_finti(
         apiari=apiari or ApiariFinti(),
         alveari=alveari or AlveariFinti(),
         ispezioni=ispezioni or IspezioniFinte(),
+        produzione=ProduzioneFinta(),
+        previsioni=PrevisioniInMemoria(),
+        modelli=ModelliFinti(),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
     )
 
