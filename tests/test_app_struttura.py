@@ -308,3 +308,23 @@ def test_lapiario_attivo_e_una_chiave_dello_stato_inizializzata_in_un_punto():
     assert 'CHIAVE_APIARIO_ATTIVO = "apiario_attivo_id"' in sorgente
     # utente, apiario attivo, esito dell'ultima scrittura (M6-T3)
     assert sorgente.count("st.session_state.setdefault(") == 3
+
+
+def test_i_due_grep_della_dod_di_m6_t9():
+    """`grep -r unsafe_allow_html app/` solo in `badge_stato`; nessun SELECT, joblib.load o
+    requests.post in `app/`. Ricerca di testo come grep: anche commenti e docstring."""
+    vietati = re.compile(r"SELECT|joblib\.load|requests\.post")
+    for percorso in FILE_APP:
+        testo = percorso.read_text(encoding="utf-8")
+        assert not vietati.search(testo), percorso.name
+        if "unsafe_allow_html" in testo:
+            assert percorso.name == "ui.py", percorso.name
+            corpo = ast.get_source_segment(
+                testo,
+                next(
+                    n
+                    for n in ast.parse(testo).body
+                    if isinstance(n, ast.FunctionDef) and n.name == "badge_stato"
+                ),
+            )
+            assert testo.count("unsafe_allow_html") == corpo.count("unsafe_allow_html")

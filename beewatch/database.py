@@ -207,7 +207,9 @@ class Database:
             except mysql.connector.Error as errore:
                 if errore.errno not in ERRORI_TRANSITORI or fatti == len(attese):
                     self._registra(errore, "Connessione al database non riuscita")
-                    raise DatabaseError(self._messaggio(errore, in_connessione=True)) from errore
+                    raise DatabaseError(
+                        self._messaggio(errore, in_connessione=True), connessione=True
+                    ) from errore
                 attesa = attese[fatti]
                 fatti += 1
                 logger.warning(

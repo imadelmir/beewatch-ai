@@ -47,7 +47,15 @@ class DatabaseError(BeeWatchError):
     Copre connessione rifiutata, credenziali sbagliate, timeout e query
     fallite. Il modulo di accesso ai dati traduce qui le eccezioni del driver,
     così il resto del progetto non conosce `mysql.connector`.
+
+    `connessione` è vero quando non si è riusciti nemmeno ad aprire la connessione: allora
+    il problema è il server, non la singola query, e anche le letture dopo falliranno
+    (l'interfaccia lo usa per non ritentare a ogni lettura, M6-T9).
     """
+
+    def __init__(self, *argomenti: object, connessione: bool = False) -> None:
+        super().__init__(*argomenti)
+        self.connessione = connessione
 
 
 class ValidationError(BeeWatchError):
