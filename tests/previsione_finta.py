@@ -83,7 +83,14 @@ class PredittoreFinto:
         self.inferiore, self.superiore, self.errore = inferiore, superiore, errore
         self.ricevute: list[dict] = []
         self.metadati: dict[str, Any] = {
-            "metriche": {"hold_out_2010_2012": {"mae_kg": 3.5, "rmse_kg": 4.5, "r2": 0.6}},
+            "metriche": {
+                "hold_out_2010_2012": {"mae_kg": 3.5, "rmse_kg": 4.5, "r2": 0.62},
+                "cross_validation": {"mae_kg": {"media": 4.1, "dev_std": 0.1}},
+                "baseline_hold_out": {
+                    "media globale": {"mae_kg": 6.7},
+                    "persistenza (resa dell'anno prima)": {"mae_kg": 4.1},
+                },
+            },
             "versione": "v-finto",
             "algoritmo": "RandomForestRegressor",
             "addestrato_il": "2026-10-23T12:00:00+00:00",

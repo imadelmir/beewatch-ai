@@ -419,6 +419,38 @@ def test_metrica_formatta_valore_unita_delta_e_aiuto(app_pronta):
     assert confidenza.value == "Media"  # un testo resta com'è
 
 
+def test_figura_barre_ha_assi_con_unita_categorie_palette_e_motivi(ui):
+    df = pd.DataFrame(
+        {"anno": [2010, 2010, 2011, 2011], "serie": ["a", "b", "a", "b"], "kg": [1, 2, 3, 4]}
+    )
+
+    figura = ui.figura_barre(
+        df, "anno", "kg", "Titolo", etichetta_x="Anno", etichetta_y="Resa (kg)", gruppo="serie"
+    )
+
+    assert figura.layout.xaxis.title.text == "Anno"
+    assert figura.layout.yaxis.title.text == "Resa (kg)"
+    assert figura.layout.xaxis.type == "category"  # «2010», mai «2010,5»
+    assert figura.layout.barmode == "group"
+    assert [t.marker.color for t in figura.data] == [ui.PRIMARIO, ui.TESTO]
+    assert len({t.marker.pattern.shape for t in figura.data}) == 2  # non solo il colore
+
+
+def test_grafico_barre_senza_dati_mostra_lo_stato_vuoto(app_pronta):
+    def corpo():
+        import pandas as pd
+        import ui
+
+        ui.grafico_barre(
+            pd.DataFrame({"a": [], "b": []}), "a", "b", "T", etichetta_x="A",
+            etichetta_y="B (kg)", fonte="prova",
+        )  # fmt: skip
+
+    at = script(corpo).run()
+    assert any("Non ci sono ancora dati" in i.value for i in at.info)
+    assert not at.get("plotly_chart")
+
+
 def test_etichetta_rischio_dice_il_livello_a_parole(ui):
     assert [ui.etichetta_rischio(livello) for livello in LivelloRischio] == [
         "Nessun rischio",

@@ -15,7 +15,15 @@ from datetime import date
 from decimal import Decimal
 
 from beewatch.exceptions import DatabaseError, ValidationError
-from beewatch.models import Alveare, Apiario, Ispezione, LivelloRischio, StatoAlveare
+from beewatch.models import (
+    Alveare,
+    Apiario,
+    Ispezione,
+    LivelloRischio,
+    Raccolto,
+    StatoAlveare,
+    TipoMiele,
+)
 
 
 class ApiariInMemoria:
@@ -262,3 +270,39 @@ def anagrafica_di_prova(
 
 
 DATABASE_SPENTO = DatabaseError("Il server MySQL non risponde.")
+
+
+class RaccoltiInMemoria:
+    """I raccolti, come `RaccoltiRepository.per_apiario`: dell'utente, dal più recente."""
+
+    def __init__(self, apiari: ApiariInMemoria, *raccolti: Raccolto) -> None:
+        self.apiari = apiari
+        self.righe = list(raccolti)
+        self.errore: Exception | None = None
+
+    def per_apiario(self, utente_id: int, apiario_id: int) -> list[Raccolto]:
+        if self.errore:
+            raise self.errore
+        if not self.apiari.dell_utente(utente_id, apiario_id):
+            return []
+        scelti = [r for r in self.righe if r.apiario_id == apiario_id]
+        return sorted(scelti, key=lambda r: (r.data_raccolto, r.id), reverse=True)
+
+
+def raccolti_di_prova(apiari: ApiariInMemoria) -> RaccoltiInMemoria:
+    """I raccolti di Collina: tre dell'apiario intero, uno di A1, uno dell'alveare eliminato A9."""
+    return RaccoltiInMemoria(
+        apiari,
+        Raccolto(apiario_id=10, tipo_miele=TipoMiele.ACACIA, data_raccolto=date(2025, 5, 28),
+                 quantita_kg=Decimal("34.50"), id=1),
+        Raccolto(apiario_id=10, tipo_miele=TipoMiele.CASTAGNO, data_raccolto=date(2025, 7, 2),
+                 quantita_kg=Decimal("21.00"), id=2),
+        Raccolto(apiario_id=10, alveare_id=1, tipo_miele=TipoMiele.MILLEFIORI,
+                 data_raccolto=date(2025, 8, 30), quantita_kg=Decimal("12.80"), id=3),
+        Raccolto(apiario_id=10, tipo_miele=TipoMiele.ACACIA, data_raccolto=date(2026, 5, 30),
+                 quantita_kg=Decimal("29.20"), id=4),
+        Raccolto(apiario_id=10, alveare_id=9, tipo_miele=TipoMiele.ACACIA,
+                 data_raccolto=date(2026, 6, 1), quantita_kg=Decimal("5.00"), id=5),
+        Raccolto(apiario_id=20, tipo_miele=TipoMiele.ACACIA, data_raccolto=date(2026, 6, 1),
+                 quantita_kg=Decimal("99.00"), id=6),
+    )  # fmt: skip

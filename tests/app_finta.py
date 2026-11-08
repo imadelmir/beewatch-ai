@@ -16,10 +16,11 @@ from types import ModuleType
 
 import pytest
 import streamlit as st
-from assistente_finto import RiepiloghiInMemoria
+from assistente_finto import RaccoltiVuoti, RiepiloghiInMemoria
 from previsione_finta import ModelliFinti, PrevisioniInMemoria, ProduzioneFinta
 from streamlit.testing.v1 import AppTest
 
+from beewatch.ml.predictor import Stima
 from beewatch.models import Alveare, Apiario, Ispezione, LivelloRischio, StatoAlveare
 from beewatch.services import Servizi
 
@@ -115,13 +116,26 @@ class IspezioniFinte:
 
 
 class PredittoreStub:
+    """Un predittore con i metadati di un modello vero (le chiavi di `models/*.json`)."""
+
     versione = "v-stub"
     metadati = {
         "algoritmo": "RandomForestRegressor",
-        "metriche": {"hold_out_2010_2012": {"mae_kg": 3.499}},
+        "metriche": {
+            "hold_out_2010_2012": {"mae_kg": 3.499, "rmse_kg": 4.483, "r2": 0.624},
+            "cross_validation": {"mae_kg": {"media": 4.088, "dev_std": 0.116}},
+            "baseline_hold_out": {
+                "media globale": {"mae_kg": 6.655},
+                "persistenza (resa dell'anno prima)": {"mae_kg": 4.058},
+            },
+        },
         "addestrato_il": "2026-10-23T12:00:00+00:00",
         "addestramento": {"righe": 600},
     }
+
+    def stima(self, riga: dict) -> Stima:
+        valore = float(riga["resa_media_3_anni_prima"])
+        return Stima(valore, valore - 3.0, valore + 4.0, 0.8)
 
 
 def servizi_finti(
@@ -142,6 +156,7 @@ def servizi_finti(
         previsioni=PrevisioniInMemoria(),
         modelli=ModelliFinti(),
         riepiloghi=RiepiloghiInMemoria(),
+        raccolti=RaccoltiVuoti(),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
     )
 
