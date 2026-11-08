@@ -8,6 +8,7 @@ errori) e cosa è cambiato nei dati. Le stesse operazioni sul database vero sono
 
 from __future__ import annotations
 
+import contextlib
 from datetime import date
 
 import pytest
@@ -17,6 +18,11 @@ from streamlit.testing.v1 import AppTest
 
 from beewatch.models import StatoAlveare
 from beewatch.services import Servizi
+
+try:  # dalla 1.67 AppTest rifiuta i clic sui widget disabilitati con questo errore
+    from streamlit.testing.v1.errors import AppTestError
+except ImportError:  # fino alla 1.60 il clic passa: nessun errore da aspettarsi
+    AppTestError = ()  # contextlib.suppress(()) non sopprime nulla
 
 PAGINA = APP / "pages" / "1_Alveari.py"
 
@@ -224,8 +230,12 @@ def test_eliminare_chiede_una_conferma_esplicita(anagrafica):
     at.selectbox(key="alveare_da_modificare").select(2).run()
 
     assert at.button(key="alveare_2_elimina").disabled  # senza spunta non si preme
-    at.button(key="alveare_2_elimina").click().run()
-    assert alveari.righe[2].attivo  # e se anche arrivasse un clic, non succede nulla
+    # Un clic arrivato lo stesso (un client manipolato) non deve eliminare: la pagina ricontrolla
+    # la spunta. Fino a Streamlit 1.60 AppTest lo lascia passare e lo prova; dalla 1.67 AppTest
+    # stesso rifiuta di cliccare un bottone disabilitato.
+    with contextlib.suppress(AppTestError):
+        at.button(key="alveare_2_elimina").click().run()
+    assert alveari.righe[2].attivo
 
     at.checkbox(key="alveare_2_conferma").check().run()
     assert not at.button(key="alveare_2_elimina").disabled
