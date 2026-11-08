@@ -29,6 +29,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import numpy as np
@@ -45,10 +46,17 @@ from beewatch.ai.prompt import versione_prompt
 from beewatch.ai.riepilogo import Riepilogo
 from beewatch.config import Config, ottieni
 from beewatch.database import Database
-from beewatch.exceptions import ConfigError, DatabaseError, ValidationError
+from beewatch.exceptions import ConfigError, DatabaseError, ModelError, ValidationError
 from beewatch.logging_config import ottieni_logger
 from beewatch.ml.artefatto import percorso_per_la_tabella, riga_tabella_modelli
-from beewatch.ml.features import FEATURE, TARGET, costruisci_feature_storiche
+from beewatch.ml.features import (
+    COLONIE_ANNO_PRIMA,
+    FEATURE,
+    RESA_ANNO_PRIMA,
+    RESA_MEDIA_3_ANNI_PRIMA,
+    TARGET,
+    costruisci_feature_storiche,
+)
 from beewatch.ml.predictor import Predittore
 from beewatch.models import (
     Alveare,
@@ -112,6 +120,18 @@ class RisultatoPrevisione:
     versione_modello: str
     errore_medio_kg: float  # il MAE del modello sul 2010–2012
     feature: dict[str, Any]  # i valori con cui il modello ha previsto
+    parametri_manuali: bool = False  # feature scritte dall'utente: una simulazione, non salvata
+
+
+@dataclass(frozen=True)
+class IntervalloParametro:
+    """L'intervallo che il modello ha visto in addestramento per un parametro scritto a mano."""
+
+    campo: str
+    etichetta: str
+    minimo: float
+    massimo: float
+    unita: str
 
 
 @dataclass(frozen=True)
@@ -222,6 +242,25 @@ def _numero(valore: float) -> float | None:
     )
 
 
+def _parametro(valore: Any, intervallo: IntervalloParametro) -> float:
+    """Un parametro scritto a mano: un numero finito dentro l'intervallo visto in addestramento."""
+    campo, nome = intervallo.campo, intervallo.etichetta
+    if isinstance(valore, bool) or not isinstance(valore, int | float | Decimal | np.number):
+        raise ValidationError(f"«{nome}» deve essere un numero.", campo=campo)
+    numero = float(valore)
+    if not math.isfinite(numero):
+        raise ValidationError(f"«{nome}» deve essere un numero.", campo=campo)
+    if not intervallo.minimo <= numero <= intervallo.massimo:
+        raise ValidationError(
+            f"«{nome}» = {numero:g} {intervallo.unita} è fuori da ciò che il modello ha visto in "
+            f"addestramento (da {intervallo.minimo:g} a {intervallo.massimo:g} "
+            f"{intervallo.unita}): oltre quei valori non sa stimare, la previsione non sarebbe "
+            "affidabile.",
+            campo=campo,
+        )
+    return numero
+
+
 def _in_elenco(ispezione: Ispezione, codice_alveare: str) -> IspezioneInElenco:
     peso = ispezione.peso_kg
     return IspezioneInElenco(
@@ -255,6 +294,7 @@ class Servizi:
     ) -> None:
         self._crea_predittore = crea_predittore
         self._predittore: Predittore | None = None
+        self._intervalli: tuple[IntervalloParametro, ...] | None = None
         self._crea_llm = crea_llm
         self._assistente: AssistenteIspezioni | None = None
         self._blocco = threading.Lock()
@@ -635,75 +675,84 @@ class Servizi:
         stato = self._stato(codice_stato)
         anno = self._anno(anno, stato)
 
-        feature = self._feature(stato.codice, anno)
-        stima = self.predittore.stima(
-            {**feature, **{k: np.nan for k, v in feature.items() if v is None}}
-        )
-        centro = round(stima.valore_kg)
-        inferiore = math.floor(stima.inferiore_kg)
-        superiore = math.ceil(stima.superiore_kg)
-        larghezza = superiore - inferiore
-        mostra = larghezza <= centro
-        messaggio = None
-        if not mostra:
-            messaggio = (
-                f"L'intervallo di errore ({larghezza} kg) è più largo della stima ({centro} kg): "
-                "con questi dati non si può dare una previsione utile."
-            )
+        return self._stima(utente, alveare, stato, anno, self._feature(stato.codice, anno))
 
-        metadati = self.predittore.metadati
-        versione = self.predittore.versione
-        identificativo = None
-        if mostra:
-            self._registra_il_modello_se_manca()
-            salvata = self._previsioni.salva_previsione(
-                Previsione(
-                    utente_id=utente,
-                    alveare_id=alveare,
-                    versione_modello=versione,
-                    codice_stato_riferimento=stato.codice,
-                    anno_riferimento=anno,
-                    stima_kg=centro,
-                    limite_inferiore_kg=inferiore,
-                    limite_superiore_kg=superiore,
-                    feature=feature,
+    def intervalli_parametri(self) -> tuple[IntervalloParametro, ...]:
+        """Gli intervalli dei parametri a mano: il minimo e il massimo visti in addestramento.
+
+        Vengono dal pannello di addestramento (Q8), letto una volta sola: un modello a foreste
+        casuali non sa andare oltre i valori che ha visto, quindi fuori da qui la stima non vale.
+
+        Raises:
+            ModelError: il pannello non è nel database (il dataset non è stato caricato).
+            DatabaseError: il database non risponde.
+        """
+        if self._intervalli is None:
+            righe = self._produzione.dati_addestramento()
+            if not righe:
+                raise ModelError(
+                    "I dati di addestramento non sono nel database: carica il dataset con "
+                    "`python scripts/run_etl.py`."
                 )
-            )
-            identificativo = salvata.id
-            logger.info(
-                "Previsione %s salvata: %s %d, modello %s",
-                identificativo,
-                stato.codice,
-                anno,
-                versione,
-            )
-        else:
-            logger.info("Stima non mostrabile: %s %d, intervallo %d kg > stima %d kg",
-                        stato.codice, anno, larghezza, centro)  # fmt: skip
+            rese = [float(r["resa_per_colonia_kg"]) for r in righe]
+            colonie = [float(r["numero_colonie"]) for r in righe]
+            self._intervalli = (
+                IntervalloParametro(RESA_ANNO_PRIMA, "Resa dell'anno prima", min(rese),
+                                    max(rese), "kg"),
+                IntervalloParametro(RESA_MEDIA_3_ANNI_PRIMA, "Resa media dei 3 anni prima",
+                                    min(rese), max(rese), "kg"),
+                IntervalloParametro(COLONIE_ANNO_PRIMA, "Colonie dell'anno prima",
+                                    min(colonie), max(colonie), "colonie"),
+            )  # fmt: skip
+        return self._intervalli
 
-        return RisultatoPrevisione(
-            id=identificativo,
-            utente_id=utente,
-            alveare_id=alveare,
-            codice_stato=stato.codice,
-            nome_stato=stato.nome,
-            anno=anno,
-            stima_kg=centro,
-            limite_inferiore_kg=inferiore,
-            limite_superiore_kg=superiore,
-            livello=stima.livello,
-            mostra_stima=mostra,
-            messaggio=messaggio,
-            retrospettiva=anno < stato.ultimo_anno,
-            versione_modello=versione,
-            errore_medio_kg=float(metadati["metriche"]["hold_out_2010_2012"]["mae_kg"]),
-            feature=feature,
-        )
+    def prevedi_con_parametri(
+        self,
+        utente_id: int,
+        codice_stato: str,
+        anno: int,
+        *,
+        resa_anno_prima: Any,
+        resa_media_3_anni_prima: Any,
+        colonie_anno_prima: Any,
+    ) -> RisultatoPrevisione:
+        """Una simulazione: la stima con i valori storici scritti dall'utente, non letti dai dati.
 
-    def storico_previsioni(self, utente_id: int, limite: int = 20) -> list[Riga]:
-        """Le ultime previsioni dell'utente, dalla più recente, col modello che le ha prodotte."""
+        Lo stato e l'anno seguono le regole di `prevedi_produzione`; ogni parametro deve stare
+        nell'intervallo visto in addestramento (`intervalli_parametri`), altrimenti si rifiuta con
+        il campo e l'intervallo ammesso. Non si salva: lo storico raccoglie solo le previsioni
+        fatte sui dati veri.
+
+        Raises:
+            ValidationError: utente, stato, anno o un parametro non validi o incompatibili.
+            ModelError: il modello manca o non è utilizzabile.
+            DatabaseError: il database non risponde.
+        """
         utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
-        return self._previsioni.ultime_previsioni(utente, limite)
+        stato = self._stato(codice_stato)
+        anno = self._anno(anno, stato)
+        valori = {
+            RESA_ANNO_PRIMA: resa_anno_prima,
+            RESA_MEDIA_3_ANNI_PRIMA: resa_media_3_anni_prima,
+            COLONIE_ANNO_PRIMA: colonie_anno_prima,
+        }
+        feature: dict[str, Any] = {"codice_stato": stato.codice, "anno": anno}
+        for intervallo in self.intervalli_parametri():
+            feature[intervallo.campo] = _parametro(valori[intervallo.campo], intervallo)
+        return self._stima(utente, None, stato, anno, feature, salva=False)
+
+    def storico_previsioni(
+        self, utente_id: int, limite: int = 20, alveare_id: int | None = None
+    ) -> list[Riga]:
+        """Le ultime previsioni dell'utente, dalla più recente, col modello che le ha prodotte.
+
+        Con `alveare_id` solo quelle collegate a quell'alveare.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        alveare = _id_positivo(alveare_id, "alveare_id", obbligatorio=False)
+        if alveare is None:
+            return self._previsioni.ultime_previsioni(utente, limite)
+        return self._previsioni.ultime_previsioni(utente, limite, alveare_id=alveare)
 
     # ----------------------------------------------------------------------- #
     # Riepilogo AI di un'ispezione
@@ -902,6 +951,82 @@ class Servizi:
                    int(riga[nome]) if nome == "anno" else _numero(float(riga[nome])))
             for nome in FEATURE
         }  # fmt: skip
+
+    def _stima(
+        self,
+        utente: int,
+        alveare: int | None,
+        stato: StatoPrevedibile,
+        anno: int,
+        feature: dict[str, Any],
+        *,
+        salva: bool = True,
+    ) -> RisultatoPrevisione:
+        """Stima, arrotonda, applica la regola dell'intervallo e, se si mostra e `salva`, salva."""
+        stima = self.predittore.stima(
+            {**feature, **{k: np.nan for k, v in feature.items() if v is None}}
+        )
+        centro = round(stima.valore_kg)
+        inferiore = math.floor(stima.inferiore_kg)
+        superiore = math.ceil(stima.superiore_kg)
+        larghezza = superiore - inferiore
+        mostra = larghezza <= centro
+        messaggio = None
+        if not mostra:
+            messaggio = (
+                f"L'intervallo di errore ({larghezza} kg) è più largo della stima ({centro} kg): "
+                "con questi dati non si può dare una previsione utile."
+            )
+
+        metadati = self.predittore.metadati
+        versione = self.predittore.versione
+        identificativo = None
+        if mostra and salva:
+            self._registra_il_modello_se_manca()
+            salvata = self._previsioni.salva_previsione(
+                Previsione(
+                    utente_id=utente,
+                    alveare_id=alveare,
+                    versione_modello=versione,
+                    codice_stato_riferimento=stato.codice,
+                    anno_riferimento=anno,
+                    stima_kg=centro,
+                    limite_inferiore_kg=inferiore,
+                    limite_superiore_kg=superiore,
+                    feature=feature,
+                )
+            )
+            identificativo = salvata.id
+            logger.info(
+                "Previsione %s salvata: %s %d, modello %s",
+                identificativo,
+                stato.codice,
+                anno,
+                versione,
+            )
+        elif not mostra:
+            logger.info("Stima non mostrabile: %s %d, intervallo %d kg > stima %d kg",
+                        stato.codice, anno, larghezza, centro)  # fmt: skip
+
+        return RisultatoPrevisione(
+            id=identificativo,
+            utente_id=utente,
+            alveare_id=alveare,
+            codice_stato=stato.codice,
+            nome_stato=stato.nome,
+            anno=anno,
+            stima_kg=centro,
+            limite_inferiore_kg=inferiore,
+            limite_superiore_kg=superiore,
+            livello=stima.livello,
+            mostra_stima=mostra,
+            messaggio=messaggio,
+            retrospettiva=anno < stato.ultimo_anno,
+            versione_modello=versione,
+            errore_medio_kg=float(metadati["metriche"]["hold_out_2010_2012"]["mae_kg"]),
+            feature=feature,
+            parametri_manuali=not salva,
+        )
 
     def _registra_il_modello_se_manca(self) -> None:
         versione = self.predittore.versione

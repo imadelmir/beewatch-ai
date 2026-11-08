@@ -202,16 +202,23 @@ class PrevisioniRepository(_Repository):
             nuovo_id = cursore.lastrowid
         return Previsione(**{**previsione.__dict__, "id": nuovo_id})
 
-    def ultime_previsioni(self, utente_id: int, limite: int = 20) -> list[Riga]:
-        """Q9 · storico delle stime, ognuna con il modello che l'ha prodotta e il suo errore."""
+    def ultime_previsioni(
+        self, utente_id: int, limite: int = 20, alveare_id: int | None = None
+    ) -> list[Riga]:
+        """Q9 · storico delle stime, ognuna con il modello che l'ha prodotta e il suo errore.
+
+        Con `alveare_id` solo quelle collegate a quell'alveare (M6-T5).
+        """
         righe = self._righe(
-            "SELECT pr.id, pr.creato_il, al.codice AS alveare, pr.codice_stato_riferimento, "
-            "pr.anno_riferimento, pr.stima_kg, pr.limite_inferiore_kg, pr.limite_superiore_kg, "
-            "pr.feature_json, m.versione, m.algoritmo, m.mae_kg FROM previsioni pr "
+            "SELECT pr.id, pr.creato_il, pr.alveare_id, al.codice AS alveare, "
+            "pr.codice_stato_riferimento, pr.anno_riferimento, pr.stima_kg, "
+            "pr.limite_inferiore_kg, pr.limite_superiore_kg, pr.feature_json, m.versione, "
+            "m.algoritmo, m.mae_kg FROM previsioni pr "
             "JOIN modelli m ON m.versione = pr.versione_modello "
             "LEFT JOIN alveari al ON al.id = pr.alveare_id "
-            "WHERE pr.utente_id = %s ORDER BY pr.creato_il DESC, pr.id DESC LIMIT %s",
-            (utente_id, limite),
+            "WHERE pr.utente_id = %s AND (%s IS NULL OR pr.alveare_id = %s) "
+            "ORDER BY pr.creato_il DESC, pr.id DESC LIMIT %s",
+            (utente_id, alveare_id, alveare_id, limite),
         )
         return [{**r, "feature_json": _decodifica_json(r["feature_json"])} for r in righe]
 
