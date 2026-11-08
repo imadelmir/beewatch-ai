@@ -1,4 +1,4 @@
-"""Finti e scorciatoie per eseguire l'interfaccia con `AppTest` (M6-T1, M6-T2).
+"""Finti e scorciatoie per eseguire l'interfaccia con `AppTest` (M6-T1, M6-T2, M6-T4).
 
 Servizi veri (`Servizi`) con repository finti: nessun database, nessuna rete. La fixture
 `app_pronta` (in `conftest.py`) mette `app/` nel percorso degli import e pulisce le cache; qui ci
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Iterator
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
@@ -17,7 +18,7 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from beewatch.models import Apiario
+from beewatch.models import Alveare, Apiario, Ispezione, LivelloRischio, StatoAlveare
 from beewatch.services import Servizi
 
 RADICE = Path(__file__).resolve().parents[1]
@@ -85,6 +86,31 @@ class AlveariFinti:
         return []
 
 
+class AlveariConUnaIspezione(AlveariFinti):
+    """L'alveare A3 di Collina, ispezionato il 30/10/2026: per le pagine «con dati»."""
+
+    def trova_alveari_attivi(self, utente_id: int) -> list[Alveare]:
+        return [Alveare(apiario_id=10, codice="A3", stato=StatoAlveare.IN_SALUTE, id=3)]
+
+    def elenco_con_ultima_ispezione(self, utente_id: int) -> list[dict]:
+        return [
+            {"id": 3, "codice": "A3", "ultima_ispezione": date(2026, 10, 30),
+             "peso_kg": Decimal("38.50")}
+        ]  # fmt: skip
+
+
+class IspezioniFinte:
+    """Una sola ispezione, dell'alveare A3 (`AlveariConUnaIspezione`)."""
+
+    def ispezioni_per_alveare(self, utente_id: int, alveare_id: int) -> list[Ispezione]:
+        if alveare_id != 3:
+            return []
+        return [
+            Ispezione(alveare_id=3, data_ispezione=date(2026, 10, 30), id=1,
+                      livello_rischio=LivelloRischio.BASSO, peso_kg=Decimal("38.50"))
+        ]  # fmt: skip
+
+
 class PredittoreStub:
     versione = "v-stub"
     metadati = {
@@ -99,13 +125,16 @@ def servizi_finti(
     dashboard: DashboardFinto | None = None,
     apiari: ApiariFinti | None = None,
     crea_predittore=PredittoreStub,
+    alveari: AlveariFinti | None = None,
+    ispezioni: IspezioniFinte | None = None,
 ) -> Servizi:
     return Servizi(
         None,
         crea_predittore=crea_predittore,
         dashboard=dashboard or DashboardFinto(),
         apiari=apiari or ApiariFinti(),
-        alveari=AlveariFinti(),
+        alveari=alveari or AlveariFinti(),
+        ispezioni=ispezioni or IspezioniFinte(),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
     )
 
@@ -119,6 +148,15 @@ def installa(avvio, monkeypatch, servizi: Servizi) -> list[int]:
 
 def esegui(file: Path) -> AppTest:
     return AppTest.from_file(str(file), default_timeout=30).run()
+
+
+def naviga(file: Path) -> AppTest:
+    """Apre la Home e poi la pagina, come nel browser: così Streamlit conosce tutte le pagine.
+
+    Serve alle pagine con `st.page_link` (Ispezioni): aperte da sole, il collegamento fallisce.
+    """
+    at = esegui(APP / "Home.py")
+    return at if file.name == "Home.py" else at.switch_page(str(file.relative_to(APP))).run()
 
 
 def valori(elementi) -> list[str]:

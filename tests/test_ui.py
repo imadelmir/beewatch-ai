@@ -27,10 +27,13 @@ from app_finta import (
     APP,
     PAGINE,
     RADICE,
+    AlveariConUnaIspezione,
     ApiariFinti,
     DashboardFinto,
+    IspezioniFinte,
     esegui,
     installa,
+    naviga,
     servizi_finti,
     valori,
 )
@@ -45,7 +48,7 @@ from beewatch.exceptions import (
     ModelError,
     ValidationError,
 )
-from beewatch.models import StatoAlveare
+from beewatch.models import LivelloRischio, StatoAlveare
 
 SPEC = RADICE / "docs" / "markdown" / "M6-interfaccia" / "ui_spec.md"
 UI = APP / "ui.py"
@@ -395,9 +398,12 @@ def test_metrica_formatta_valore_unita_delta_e_aiuto(app_pronta):
         ui.metrica("Peso", None, "kg", delta=None)
         ui.metrica("Crescita", 12, "kg", delta=3)
         ui.metrica("Scarto", 5, "kg", delta=float("nan"))
+        from datetime import date  # AppTest esegue la funzione da sola: niente globali
+
+        ui.metrica("Ultima ispezione", date(2026, 10, 30), None)
 
     at = script(corpo).run()
-    produzione, alveari, peso, crescita, scarto = at.metric
+    produzione, alveari, peso, crescita, scarto, ultima = at.metric
     assert (produzione.label, produzione.value, produzione.delta) == (
         "Produzione",
         "1 234,5 kg",
@@ -408,6 +414,18 @@ def test_metrica_formatta_valore_unita_delta_e_aiuto(app_pronta):
     assert peso.value == "—"  # mancante: mai uno zero inventato
     assert crescita.delta == "+3 kg"
     assert not scarto.delta  # un delta mancante non si mostra
+    assert ultima.value == "30/10/2026"  # una data all'italiana, non un numero
+
+
+def test_etichetta_rischio_dice_il_livello_a_parole(ui):
+    assert [ui.etichetta_rischio(livello) for livello in LivelloRischio] == [
+        "Nessun rischio",
+        "Rischio basso",
+        "Rischio medio",
+        "Rischio alto",
+    ]
+    assert ui.etichetta_rischio("alto") == "Rischio alto"  # anche dal codice del database
+    assert ui.etichetta_rischio("altissimo") == ui.etichetta_rischio(None) == "Rischio sconosciuto"
 
 
 @pytest.mark.parametrize("stato", list(StatoAlveare))
@@ -643,9 +661,10 @@ def test_se_il_modello_manca_la_sidebar_lo_dice(app_pronta, monkeypatch):
 def test_ogni_pagina_con_dati_ha_intestazione_e_un_numero_di_contesto(
     app_pronta, monkeypatch, pagina
 ):
-    installa(app_pronta, monkeypatch, servizi_finti())
+    finti = servizi_finti(alveari=AlveariConUnaIspezione(), ispezioni=IspezioniFinte())
+    installa(app_pronta, monkeypatch, finti)
 
-    at = esegui(pagina)
+    at = naviga(pagina)
 
     assert not at.exception
     assert len(at.title) == 1 and len(at.markdown) >= 1  # titolo e riga di contesto

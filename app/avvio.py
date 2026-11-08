@@ -23,6 +23,8 @@ stanno in `app/ui.py` (M6-T2), che legge da qui risorse, letture e stato.
 
 from __future__ import annotations
 
+from datetime import date
+
 import streamlit as st
 
 from beewatch.exceptions import BeeWatchError
@@ -31,6 +33,7 @@ from beewatch.models import Apiario
 from beewatch.services import (
     AlveareInElenco,
     ApiarioScelta,
+    IspezioneInElenco,
     Panoramica,
     Servizi,
     StatoModello,
@@ -112,6 +115,22 @@ def apiari_in_anagrafica(utente_id: int) -> tuple[Apiario, ...]:
 def alveari_dell_apiario(utente_id: int, apiario_id: int) -> tuple[AlveareInElenco, ...]:
     """Gli alveari attivi di un apiario, con l'ultima ispezione (sola lettura, in cache)."""
     return tuple(servizi().alveari_dell_apiario(utente_id, apiario_id))
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def ispezioni_dell_apiario(
+    utente_id: int,
+    apiario_id: int,
+    alveare_id: int | None = None,
+    dal: date | None = None,
+    al: date | None = None,
+) -> tuple[IspezioneInElenco, ...]:
+    """Lo storico delle ispezioni di un apiario, filtrato (sola lettura, in cache)."""
+    return tuple(
+        servizi().ispezioni_dell_apiario(
+            utente_id, apiario_id, alveare_id=alveare_id, dal=dal, al=al
+        )
+    )
 
 
 def svuota_letture() -> None:
