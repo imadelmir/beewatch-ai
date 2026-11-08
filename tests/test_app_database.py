@@ -72,3 +72,28 @@ def test_le_sei_pagine_partono_con_il_database_vero(home_con_database) -> None:
         assert not at.error, pagina.name
         if pagina.name == "2_Ispezioni.py":  # lo storico del seed arriva davvero alla pagina
             assert at.dataframe and len(at.dataframe[0].value) > 0
+
+
+def test_con_un_utente_senza_dati_ogni_pagina_resta_usabile(
+    home_con_database, database_test: Database
+) -> None:
+    """M6-T9: database vuoto per l'utente (nessun apiario, nessuna stima, nessun riepilogo)."""
+    with database_test.transazione() as cursore:
+        cursore.execute(
+            "INSERT INTO utenti (email, nome_completo, hash_password) VALUES (%s, %s, %s)",
+            ("vuoto-m6t9@beewatch.test", "Utente vuoto", "x" * 60),
+        )
+        utente = cursore.lastrowid
+    try:
+        for pagina in [APP / "Home.py", *sorted((APP / "pages").glob("*.py"))]:
+            at = AppTest.from_file(str(APP / "Home.py"), default_timeout=60)
+            at.session_state["utente_id"] = utente  # `inizializza_stato` non lo sovrascrive
+            at.run()
+            if pagina.name != "Home.py":
+                at.switch_page(str(pagina.relative_to(APP))).run()
+            assert not at.exception, pagina.name
+            assert not at.error, (pagina.name, [e.value for e in at.error])
+            assert at.session_state["utente_id"] == utente
+    finally:
+        with database_test.transazione() as cursore:
+            cursore.execute("DELETE FROM utenti WHERE id = %s", (utente,))

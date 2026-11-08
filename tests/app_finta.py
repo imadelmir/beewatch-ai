@@ -145,6 +145,7 @@ def servizi_finti(
     alveari: AlveariFinti | None = None,
     ispezioni: IspezioniFinte | None = None,
     llm_in_locale: bool | None = True,
+    produzione: ProduzioneFinta | None = None,
 ) -> Servizi:
     return Servizi(
         None,
@@ -153,7 +154,7 @@ def servizi_finti(
         apiari=apiari or ApiariFinti(),
         alveari=alveari or AlveariFinti(),
         ispezioni=ispezioni or IspezioniFinte(),
-        produzione=ProduzioneFinta(),
+        produzione=produzione or ProduzioneFinta(),
         previsioni=PrevisioniInMemoria(),
         modelli=ModelliFinti(),
         riepiloghi=RiepiloghiInMemoria(),

@@ -23,12 +23,17 @@ stanno in `app/ui.py` (M6-T2), che legge da qui risorse, letture e stato.
 
 from __future__ import annotations
 
+import functools
+import threading
+import time
+from collections.abc import Callable
 from datetime import date
+from typing import Any, TypeVar
 
 import pandas as pd
 import streamlit as st
 
-from beewatch.exceptions import BeeWatchError
+from beewatch.exceptions import BeeWatchError, DatabaseError
 from beewatch.logging_config import configura, ottieni_logger
 from beewatch.models import Apiario
 from beewatch.services import (
@@ -56,6 +61,9 @@ UTENTE_DEMO_ID = 1
 
 # Quanto vive una lettura in cache. Dichiarato qui, non sparso nei decoratori.
 TTL_LETTURE_SECONDI = 60
+# Dopo un errore del database, per quanti secondi le altre letture falliscono subito con lo
+# stesso errore invece di ritentare la connessione (vedi `_interruttore`, M6-T9).
+PAUSA_DOPO_ERRORE_DB_SECONDI = 10
 
 CHIAVE_UTENTE = "utente_id"
 CHIAVE_APIARIO_ATTIVO = "apiario_attivo_id"
@@ -99,31 +107,79 @@ def modello() -> StatoModello:
 # --------------------------------------------------------------------------- #
 
 
+# --------------------------------------------------------------------------- #
+# L'interruttore del database (M6-T9)
+# --------------------------------------------------------------------------- #
+# Con un server che non risponde, ogni lettura ritenta la connessione (tre tentativi da qualche
+# secondo, `beewatch/database.py`). La sidebar e il corpo della pagina leggono ciascuno per conto
+# suo: senza interruttore l'attesa si moltiplica (circa 30 s prima dell'errore, misurati in M6-T2).
+# Dopo il primo `DatabaseError` di connessione (`connessione=True`: il server non risponde, non
+# una query sbagliata) le letture successive falliscono subito, con lo stesso messaggio,
+# per `PAUSA_DOPO_ERRORE_DB_SECONDI`; poi si riprova davvero. Una lettura riuscita lo richiude.
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+_ultimo_errore_db: dict[str, Any] = {"quando": 0.0, "errore": None}
+_blocco_errore_db = threading.Lock()
+
+
+def _interruttore(lettura: _F) -> _F:
+    @functools.wraps(lettura)
+    def protetta(*argomenti: Any, **opzioni: Any) -> Any:
+        with _blocco_errore_db:
+            errore = _ultimo_errore_db["errore"]
+            recente = time.monotonic() - _ultimo_errore_db["quando"] < PAUSA_DOPO_ERRORE_DB_SECONDI
+        if errore is not None and recente:
+            raise errore
+        try:
+            risultato = lettura(*argomenti, **opzioni)
+        except DatabaseError as nuovo:
+            if nuovo.connessione:  # il server non risponde; una query sbagliata no
+                with _blocco_errore_db:
+                    _ultimo_errore_db.update(quando=time.monotonic(), errore=nuovo)
+            raise
+        with _blocco_errore_db:
+            _ultimo_errore_db["errore"] = None
+        return risultato
+
+    return protetta  # type: ignore[return-value]
+
+
+def azzera_interruttore() -> None:
+    """Dimentica l'ultimo errore del database: lo chiama `svuota_letture` dopo una scrittura."""
+    with _blocco_errore_db:
+        _ultimo_errore_db.update(quando=0.0, errore=None)
+
+
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def panoramica(utente_id: int) -> Panoramica:
     """I numeri della Home e l'elenco degli apiari (sola lettura, `TTL_LETTURE_SECONDI`)."""
     return servizi().panoramica(utente_id)
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def apiari(utente_id: int) -> tuple[ApiarioScelta, ...]:
     """Gli apiari tra cui scegliere quello attivo (sola lettura, `TTL_LETTURE_SECONDI`)."""
     return tuple(servizi().elenca_apiari(utente_id))
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def apiari_in_anagrafica(utente_id: int) -> tuple[Apiario, ...]:
     """Gli apiari con tutti i campi, per la pagina Alveari (sola lettura, `TTL_LETTURE_SECONDI`)."""
     return tuple(servizi().apiari_in_anagrafica(utente_id))
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def alveari_dell_apiario(utente_id: int, apiario_id: int) -> tuple[AlveareInElenco, ...]:
     """Gli alveari attivi di un apiario, con l'ultima ispezione (sola lettura, in cache)."""
     return tuple(servizi().alveari_dell_apiario(utente_id, apiario_id))
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def ispezioni_dell_apiario(
     utente_id: int,
     apiario_id: int,
@@ -140,30 +196,35 @@ def ispezioni_dell_apiario(
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def riepiloghi_ispezione(utente_id: int, ispezione_id: int) -> tuple[RiepilogoSalvato, ...]:
     """I riepiloghi AI già salvati di un'ispezione, dal più recente (sola lettura, in cache)."""
     return tuple(servizi().riepiloghi_ispezione(utente_id, ispezione_id))
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def stati_prevedibili() -> tuple[StatoPrevedibile, ...]:
     """Gli stati per cui il modello può prevedere, con i loro anni (sola lettura, in cache)."""
     return tuple(servizi().stati_prevedibili())
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def intervalli_parametri() -> tuple[IntervalloParametro, ...]:
     """Gli intervalli ammessi per i parametri scritti a mano (sola lettura, in cache)."""
     return servizi().intervalli_parametri()
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def storico_previsioni(utente_id: int, alveare_id: int | None = None) -> tuple[dict, ...]:
     """Le ultime previsioni salvate, di tutti gli alveari o di uno (sola lettura, in cache)."""
     return tuple(servizi().storico_previsioni(utente_id, alveare_id=alveare_id))
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def dashboard_apiario(utente_id: int, apiario_id: int) -> DatiDashboard:
     """KPI e tabelle aggregate della Dashboard di un apiario (sola lettura, in cache)."""
     return servizi().dashboard_apiario(utente_id, apiario_id)
@@ -176,14 +237,19 @@ def metriche_modello() -> MetricheModello:
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def confronto_previsto_reale(codice_stato: str) -> pd.DataFrame:
     """Stima del modello e resa vera degli ultimi anni di uno stato (sola lettura, in cache)."""
     return servizi().confronto_previsto_reale(codice_stato)
 
 
 def svuota_letture() -> None:
-    """Dimentica tutte le letture in cache: da chiamare subito dopo una scrittura."""
+    """Dimentica tutte le letture in cache: da chiamare subito dopo una scrittura.
+
+    Una scrittura riuscita dice anche che il database risponde: l'interruttore si richiude.
+    """
     st.cache_data.clear()
+    azzera_interruttore()
 
 
 # --------------------------------------------------------------------------- #

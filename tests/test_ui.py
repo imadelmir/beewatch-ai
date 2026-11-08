@@ -37,6 +37,7 @@ from app_finta import (
     servizi_finti,
     valori,
 )
+from previsione_finta import ProduzioneFinta
 from streamlit.testing.v1 import AppTest
 
 from beewatch import exceptions
@@ -754,7 +755,9 @@ def test_ogni_pagina_regge_il_modello_mancante(app_pronta, monkeypatch, pagina):
 
 @pytest.mark.parametrize("pagina", PAGINE, ids=lambda p: p.name)
 def test_ogni_pagina_regge_il_database_vuoto(app_pronta, monkeypatch, pagina):
-    installa(app_pronta, monkeypatch, servizi_finti(apiari=ApiariFinti(())))
+    # Vuoto davvero (M6-T9): nessun apiario e nemmeno i dati USDA caricati dall'ETL.
+    vuoto = servizi_finti(apiari=ApiariFinti(()), produzione=ProduzioneFinta(vuota=True))
+    installa(app_pronta, monkeypatch, vuoto)
 
     at = esegui(pagina)
 

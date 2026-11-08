@@ -367,6 +367,7 @@ def test_esauriti_i_tentativi_database_error_senza_altre_attese(driver: DriverFi
             pytest.fail("il blocco non deve essere eseguito")  # pragma: no cover
 
     assert info.value.__cause__ is ultimo
+    assert info.value.connessione  # il server non risponde: l'interfaccia non ritenta (M6-T9)
     assert len(driver.chiamate) == len(ATTESE_RETRY) + 1 == 3
     assert driver.attese == list(ATTESE_RETRY)  # mai più di 1,5 secondi in tutto
     assert sum(ATTESE_RETRY) <= 2
@@ -407,10 +408,11 @@ def test_una_query_fallita_non_si_ripete_mai_nemmeno_per_un_errore_transitorio(
     """Rieseguire una scrittura può duplicarla: il retry riguarda solo la connessione."""
     driver.esiti = [ConnessioneFinta(query=errore_driver(2013, "Lost connection during query"))]
 
-    with pytest.raises(DatabaseError, match="si è interrotta"):
+    with pytest.raises(DatabaseError, match="si è interrotta") as info:
         with Database(CONFIG).transazione() as cursore:
             cursore.execute("INSERT INTO t VALUES (1)")
 
+    assert not info.value.connessione  # la connessione c'era: è fallita la query
     assert len(driver.chiamate) == 1
     assert driver.attese == []
     assert len(driver.connessioni[0].cursore.query) == 1
