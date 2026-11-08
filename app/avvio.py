@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import pandas as pd
 import streamlit as st
 
 from beewatch.exceptions import BeeWatchError
@@ -33,8 +34,10 @@ from beewatch.models import Apiario
 from beewatch.services import (
     AlveareInElenco,
     ApiarioScelta,
+    DatiDashboard,
     IntervalloParametro,
     IspezioneInElenco,
+    MetricheModello,
     Panoramica,
     RiepilogoSalvato,
     Servizi,
@@ -158,6 +161,24 @@ def intervalli_parametri() -> tuple[IntervalloParametro, ...]:
 def storico_previsioni(utente_id: int, alveare_id: int | None = None) -> tuple[dict, ...]:
     """Le ultime previsioni salvate, di tutti gli alveari o di uno (sola lettura, in cache)."""
     return tuple(servizi().storico_previsioni(utente_id, alveare_id=alveare_id))
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def dashboard_apiario(utente_id: int, apiario_id: int) -> DatiDashboard:
+    """KPI e tabelle aggregate della Dashboard di un apiario (sola lettura, in cache)."""
+    return servizi().dashboard_apiario(utente_id, apiario_id)
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def metriche_modello() -> MetricheModello:
+    """Le metriche del modello lette dai suoi metadati (sola lettura, in cache)."""
+    return servizi().metriche_modello()
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def confronto_previsto_reale(codice_stato: str) -> pd.DataFrame:
+    """Stima del modello e resa vera degli ultimi anni di uno stato (sola lettura, in cache)."""
+    return servizi().confronto_previsto_reale(codice_stato)
 
 
 def svuota_letture() -> None:

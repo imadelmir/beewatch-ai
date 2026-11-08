@@ -487,6 +487,75 @@ def grafico_serie(
     return figura
 
 
+def figura_barre(
+    df: pd.DataFrame,
+    x: str,
+    y: str,
+    titolo: str,
+    *,
+    etichetta_x: str,
+    etichetta_y: str,
+    gruppo: str | None = None,
+    errore_su: str | None = None,
+    errore_giu: str | None = None,
+) -> go.Figure:
+    """La figura di `grafico_barre`, senza disegnarla (serve anche ai test).
+
+    Con `gruppo` le barre sono raggruppate e ogni serie ha anche un motivo di riempimento oltre
+    al colore. L'asse x è per categorie: gli anni restano «2010», mai «2010,5».
+    """
+    figura = px.bar(
+        df,
+        x=x,
+        y=y,
+        color=gruppo,
+        pattern_shape=gruppo,
+        barmode="group",
+        error_y=errore_su,
+        error_y_minus=errore_giu,
+        title=titolo,
+        color_discrete_sequence=COLORI_SERIE,
+    )
+    figura.update_xaxes(type="category")
+    figura.update_layout(
+        xaxis_title=etichetta_x,
+        yaxis_title=etichetta_y,
+        legend_title_text="",
+        **_STILE_FIGURA,
+    )
+    return figura
+
+
+def grafico_barre(
+    df: pd.DataFrame,
+    x: str,
+    y: str,
+    titolo: str,
+    *,
+    etichetta_x: str,
+    etichetta_y: str,
+    fonte: str,
+    gruppo: str | None = None,
+    errore_su: str | None = None,
+    errore_giu: str | None = None,
+) -> go.Figure | None:
+    """Grafico a barre con lo stile comune: assi con unità, palette, didascalia con la fonte.
+
+    Le stesse regole di `grafico_serie` (specifica §10). Senza dati mostra lo stato vuoto e
+    restituisce None.
+    """
+    if df.empty:
+        blocco_vuoto("Non ci sono ancora dati da mettere nel grafico.")
+        return None
+    figura = figura_barre(
+        df, x, y, titolo, etichetta_x=etichetta_x, etichetta_y=etichetta_y, gruppo=gruppo,
+        errore_su=errore_su, errore_giu=errore_giu,
+    )  # fmt: skip
+    _disegna(figura)
+    st.caption(f"Fonte: {fonte}")
+    return figura
+
+
 # --------------------------------------------------------------------------- #
 # 9. Stima con incertezza
 # --------------------------------------------------------------------------- #

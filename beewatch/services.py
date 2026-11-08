@@ -223,6 +223,44 @@ class RiepilogoGenerato:
     in_locale: bool  # False = le note sono state inviate a un servizio esterno
 
 
+INTERO_APIARIO = "Intero apiario"  # i raccolti non attribuiti a un alveare
+ALVEARE_ELIMINATO = "Alveare eliminato"
+ANNI_CONFRONTO = 6  # quanti anni mostra il confronto previsto/reale
+
+
+@dataclass(frozen=True)
+class DatiDashboard:
+    """I numeri e le tabelle della Dashboard di un apiario, già aggregati con pandas.
+
+    `raccolti_per_anno` ha le colonne `anno`, `alveare`, `kg`; `per_alveare` le colonne
+    `alveare`, `kg`, con anche gli alveari attivi senza raccolti (zero) e, se ci sono, i chili
+    raccolti dall'apiario intero senza indicare l'alveare.
+    """
+
+    numero_alveari: int
+    produzione_totale_kg: float
+    media_per_alveare_kg: float | None  # None senza alveari: una media su zero non esiste
+    ultima_ispezione: date | None
+    raccolti_per_anno: pd.DataFrame
+    per_alveare: pd.DataFrame
+
+
+@dataclass(frozen=True)
+class MetricheModello:
+    """Le metriche del modello come le scrive il suo file di metadati (`models/*.json`)."""
+
+    versione: str
+    algoritmo: str
+    righe_addestramento: int
+    mae_kg: float
+    rmse_kg: float
+    r2: float
+    cv_mae_kg: float
+    cv_mae_dev_std_kg: float
+    migliore_baseline: str
+    migliore_baseline_mae_kg: float
+
+
 @dataclass(frozen=True)
 class RiepilogoSalvato:
     """Un riepilogo già salvato di un'ispezione, con il modello e il prompt che l'hanno scritto."""
@@ -781,6 +819,114 @@ class Servizi:
         if alveare is None:
             return self._previsioni.ultime_previsioni(utente, limite)
         return self._previsioni.ultime_previsioni(utente, limite, alveare_id=alveare)
+
+    # ----------------------------------------------------------------------- #
+    # Dashboard (M6-T7)
+    # ----------------------------------------------------------------------- #
+
+    def dashboard_apiario(self, utente_id: int, apiario_id: int) -> DatiDashboard:
+        """I KPI e le tabelle della Dashboard per un apiario dell'utente.
+
+        La produzione viene dai raccolti registrati: quelli senza alveare finiscono sotto
+        «Intero apiario», così il totale torna e nessun chilo viene attribuito a caso. La media
+        per alveare è il totale diviso per gli alveari attivi, e la pagina lo dice.
+
+        Raises:
+            ValidationError: id non validi.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        apiario = _id_positivo(apiario_id, "apiario_id", obbligatorio=True)
+        alveari = self.alveari_dell_apiario(utente, apiario)
+        codici = {a.id: a.codice for a in alveari}
+        raccolti = pd.DataFrame(
+            [
+                {
+                    "anno": r.data_raccolto.year,
+                    "alveare": INTERO_APIARIO if r.alveare_id is None
+                    else codici.get(r.alveare_id, ALVEARE_ELIMINATO),
+                    "kg": float(r.quantita_kg),
+                }
+                for r in self._raccolti.per_apiario(utente, apiario)
+            ],
+            columns=["anno", "alveare", "kg"],
+        )  # fmt: skip
+        per_anno = raccolti.groupby(["anno", "alveare"], as_index=False)["kg"].sum()
+        totali = raccolti.groupby("alveare")["kg"].sum()
+        # Ogni alveare attivo compare, anche a zero: la variabilità si vede solo così.
+        nomi = list(codici.values()) + [n for n in totali.index if n not in codici.values()]
+        per_alveare = pd.DataFrame(
+            {"alveare": nomi, "kg": [float(totali.get(n, 0.0)) for n in nomi]}
+        )
+        totale = float(raccolti["kg"].sum())
+        ispezioni = [a.ultima_ispezione for a in alveari if a.ultima_ispezione is not None]
+        return DatiDashboard(
+            numero_alveari=len(alveari),
+            produzione_totale_kg=totale,
+            media_per_alveare_kg=totale / len(alveari) if alveari else None,
+            ultima_ispezione=max(ispezioni, default=None),
+            raccolti_per_anno=per_anno.sort_values(["anno", "alveare"]).reset_index(drop=True),
+            per_alveare=per_alveare,
+        )
+
+    def metriche_modello(self) -> MetricheModello:
+        """Le metriche del modello in uso, lette dai suoi metadati: mai scritte nel codice.
+
+        Raises:
+            ModelError: il modello o i suoi metadati mancano o non sono utilizzabili.
+        """
+        metadati = self.predittore.metadati
+        metriche = metadati["metriche"]
+        tenuta, cv = metriche["hold_out_2010_2012"], metriche["cross_validation"]
+        baseline = min(metriche["baseline_hold_out"].items(), key=lambda b: b[1]["mae_kg"])
+        return MetricheModello(
+            versione=self.predittore.versione,
+            algoritmo=str(metadati["algoritmo"]),
+            righe_addestramento=int(metadati["addestramento"]["righe"]),
+            mae_kg=float(tenuta["mae_kg"]),
+            rmse_kg=float(tenuta["rmse_kg"]),
+            r2=float(tenuta["r2"]),
+            cv_mae_kg=float(cv["mae_kg"]["media"]),
+            cv_mae_dev_std_kg=float(cv["mae_kg"]["dev_std"]),
+            migliore_baseline=str(baseline[0]),
+            migliore_baseline_mae_kg=float(baseline[1]["mae_kg"]),
+        )
+
+    def confronto_previsto_reale(self, codice_stato: str) -> pd.DataFrame:
+        """Gli ultimi anni di uno stato: la stima del modello accanto alla resa vera.
+
+        Ogni stima usa solo gli anni precedenti, come `prevedi_produzione`, ma non si salva.
+        Colonne: `anno`, `previsto_kg`, `inferiore_kg`, `superiore_kg`, `reale_kg`.
+
+        Raises:
+            ValidationError: stato non tra quelli del pannello.
+            ModelError: il modello manca o non è utilizzabile.
+            DatabaseError: il database non risponde.
+        """
+        stato = self._stato(codice_stato)
+        reali = {
+            int(r["anno"]): float(r["resa_per_colonia_kg"])
+            for r in self._produzione.serie_storica_stato(stato.codice)
+        }
+        anni = [a for a in sorted(reali) if a >= stato.primo_anno][-ANNI_CONFRONTO:]
+        righe = []
+        for anno in anni:
+            feature = self._feature(stato.codice, anno)
+            stima = self.predittore.stima(
+                {**feature, **{k: np.nan for k, v in feature.items() if v is None}}
+            )
+            righe.append(
+                {
+                    "anno": anno,
+                    "previsto_kg": round(stima.valore_kg, 1),
+                    "inferiore_kg": round(stima.inferiore_kg, 1),
+                    "superiore_kg": round(stima.superiore_kg, 1),
+                    "reale_kg": reali[anno],
+                }
+            )
+        return pd.DataFrame(
+            righe, columns=["anno", "previsto_kg", "inferiore_kg", "superiore_kg", "reale_kg"]
+        )
 
     # ----------------------------------------------------------------------- #
     # Riepilogo AI di un'ispezione

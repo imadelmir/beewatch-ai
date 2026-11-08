@@ -634,3 +634,50 @@ def test_integrazione_gli_intervalli_vengono_dal_pannello_vero(servizi_veri: Ser
             resa_media_3_anni_prima=resa.minimo, colonie_anno_prima=colonie.minimo,
         )  # fmt: skip
     assert errore.value.campo == "resa_anno_prima"
+
+
+# --------------------------------------------------------------------------- #
+# M6-T7: la Dashboard con MySQL, il seed e il modello vero
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.integration
+def test_integrazione_la_dashboard_dellapiario_del_seed(
+    servizi_veri: Servizi, database_test: Database
+) -> None:
+    apiario = AlveariRepository(database_test).trova_alveari_attivi(1)[0].apiario_id
+
+    dati = servizi_veri.dashboard_apiario(1, apiario)
+
+    assert dati.numero_alveari == 4  # i quattro alveari del seed
+    assert dati.produzione_totale_kg == pytest.approx(34.5 + 21.0 + 12.8 + 29.2)
+    assert set(dati.per_alveare["alveare"]) >= {"A1", "Intero apiario"}
+    assert dati.ultima_ispezione is not None
+
+
+@pytest.mark.integration
+def test_integrazione_le_metriche_sono_quelle_del_json_committato(servizi_veri: Servizi) -> None:
+    file = json.loads(PERCORSO_COMMITTATO.with_suffix(".json").read_text(encoding="utf-8"))
+
+    m = servizi_veri.metriche_modello()
+
+    assert m.mae_kg == file["metriche"]["hold_out_2010_2012"]["mae_kg"]
+    assert m.r2 == file["metriche"]["hold_out_2010_2012"]["r2"]
+    assert m.versione == file["versione"] == "v1.0.0"
+
+
+@pytest.mark.integration
+def test_integrazione_previsto_e_reale_della_california(
+    servizi_veri: Servizi, database_test: Database
+) -> None:
+    reali = {
+        r["anno"]: float(r["resa_per_colonia_kg"])
+        for r in ProduzioneUsdaRepository(database_test).serie_storica_stato("CA")
+    }
+
+    confronto = servizi_veri.confronto_previsto_reale("CA")
+
+    assert list(confronto["anno"]) == [2007, 2008, 2009, 2010, 2011, 2012]
+    assert list(confronto["reale_kg"]) == pytest.approx([reali[a] for a in confronto["anno"]])
+    assert (confronto["inferiore_kg"] <= confronto["previsto_kg"]).all()
+    assert PrevisioniRepository(database_test).ultime_previsioni(1) == []  # non salva nulla
