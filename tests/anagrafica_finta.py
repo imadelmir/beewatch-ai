@@ -193,6 +193,13 @@ class IspezioniInMemoria:
         self.righe[nuova.id] = nuova
         return nuova
 
+    def trova(self, utente_id: int, ispezione_id: int) -> Ispezione | None:
+        self._prova()
+        ispezione = self.righe.get(ispezione_id)
+        if ispezione and self.alveari._dell_utente(utente_id, ispezione.alveare_id):
+            return ispezione
+        return None
+
     def ispezioni_per_alveare(self, utente_id: int, alveare_id: int) -> list[Ispezione]:
         self._prova()
         if not self.alveari._dell_utente(utente_id, alveare_id):

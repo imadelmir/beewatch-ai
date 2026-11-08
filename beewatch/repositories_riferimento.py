@@ -259,17 +259,20 @@ class RiepiloghiRepository(_Repository):
 
     def ultimo(self, utente_id: int, ispezione_id: int) -> Riga | None:
         """Il riepilogo più recente di un'ispezione dell'utente, con il JSON già decodificato."""
+        righe = self.elenco(utente_id, ispezione_id, limite=1)
+        return righe[0] if righe else None
+
+    def elenco(self, utente_id: int, ispezione_id: int, limite: int = 20) -> list[Riga]:
+        """I riepiloghi di un'ispezione dell'utente, dal più recente (M6-T6), JSON decodificato."""
         righe = self._righe(
             "SELECT r.id, r.ispezione_id, r.stato_salute, r.confidenza, r.riepilogo_json, "
             "r.provider, r.modello, r.versione_prompt, r.durata_ms, r.token_prompt, "
             "r.token_risposta, r.tentativi, r.creato_il FROM riepiloghi_ispezione r "
             "WHERE r.ispezione_id = %s AND r.utente_id = %s "
-            "ORDER BY r.creato_il DESC, r.id DESC LIMIT 1",
-            (ispezione_id, utente_id),
+            "ORDER BY r.creato_il DESC, r.id DESC LIMIT %s",
+            (ispezione_id, utente_id, limite),
         )
-        if not righe:
-            return None
-        return {**righe[0], "riepilogo_json": _decodifica_json(righe[0]["riepilogo_json"])}
+        return [{**r, "riepilogo_json": _decodifica_json(r["riepilogo_json"])} for r in righe]
 
 
 class ConversazioniRepository(_Repository):

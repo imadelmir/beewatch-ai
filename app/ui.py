@@ -318,9 +318,15 @@ def metrica(
     """`st.metric` uniforme: numero all'italiana, unità accanto, delta con la stessa unità.
 
     `unita` è obbligatoria anche quando non c'è (`None` per un conteggio): così non si dimentica.
-    Un valore mancante si mostra come «—», mai come zero. Una data si scrive all'italiana.
+    Un valore mancante si mostra come «—», mai come zero. Una data si scrive all'italiana; un
+    testo («Alta», «Attenzione») resta com'è.
     """
-    testo = formatta_data(valore) if isinstance(valore, date) else formatta_numero(valore)
+    if isinstance(valore, str):
+        testo = valore
+    elif isinstance(valore, date):
+        testo = formatta_data(valore)
+    else:
+        testo = formatta_numero(valore)
     st.metric(
         etichetta,
         _con_unita(testo, unita),

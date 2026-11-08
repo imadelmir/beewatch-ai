@@ -41,9 +41,9 @@ from beewatch.ai.assistant import (
     AssistenteIspezioni,
     ContestoIspezione,
 )
-from beewatch.ai.llm import LLMClient, crea_client
+from beewatch.ai.llm import FATTORE_TETTO_TEMPO, LLMClient, crea_client
 from beewatch.ai.prompt import versione_prompt
-from beewatch.ai.riepilogo import Riepilogo
+from beewatch.ai.riepilogo import Riepilogo, RiepilogoNonValido, valida_riepilogo
 from beewatch.config import Config, ottieni
 from beewatch.database import Database
 from beewatch.exceptions import ConfigError, DatabaseError, ModelError, ValidationError
@@ -223,6 +223,32 @@ class RiepilogoGenerato:
     in_locale: bool  # False = le note sono state inviate a un servizio esterno
 
 
+@dataclass(frozen=True)
+class RiepilogoSalvato:
+    """Un riepilogo già salvato di un'ispezione, con il modello e il prompt che l'hanno scritto."""
+
+    id: int
+    ispezione_id: int
+    riepilogo: Riepilogo
+    provider: str
+    modello: str
+    versione_prompt: str
+    durata_ms: int
+    token_prompt: int | None
+    token_risposta: int | None
+    tentativi: int
+    creato_il: Any  # datetime del database
+
+
+@dataclass(frozen=True)
+class InfoAssistente:
+    """Che cosa userà l'assistente, da dire prima di generare (senza segreti né chiamate)."""
+
+    descrizione: str  # «modello via provider (chiave: …)»
+    versione_prompt: str
+    attesa_massima_s: int  # tetto di una generazione, tentativo correttivo compreso
+
+
 def _id_positivo(valore: Any, campo: str, *, obbligatorio: bool) -> int | None:
     if valore is None and not obbligatorio:
         return None
@@ -291,6 +317,7 @@ class Servizi:
         riepiloghi: RiepiloghiRepository | None = None,
         dashboard: DashboardRepository | None = None,
         descrizione_llm: str = "non configurato",
+        timeout_llm: int = 60,
     ) -> None:
         self._crea_predittore = crea_predittore
         self._predittore: Predittore | None = None
@@ -308,6 +335,7 @@ class Servizi:
         self._riepiloghi = riepiloghi or RiepiloghiRepository(database)
         self._dashboard = dashboard or DashboardRepository(database)
         self.descrizione_llm = descrizione_llm  # «modello via provider (chiave: …)», senza segreti
+        self._timeout_llm = timeout_llm
 
     # ----------------------------------------------------------------------- #
     # Dipendenze
@@ -865,6 +893,57 @@ class Servizi:
         )
         return RiepilogoGenerato(id=nuovo_id, valido=True, salvato=True, messaggio=None, **comuni)
 
+    def info_assistente(self) -> InfoAssistente:
+        """Modello, versione del prompt e attesa massima: da mostrare prima di generare.
+
+        L'attesa massima è il tetto del client (tre volte `LLM_TIMEOUT`) per due chiamate, perché
+        una risposta malformata ne fa fare una seconda, correttiva. Non crea il client.
+        """
+        return InfoAssistente(
+            descrizione=self.descrizione_llm,
+            versione_prompt=versione_prompt(),
+            attesa_massima_s=2 * FATTORE_TETTO_TEMPO * self._timeout_llm,
+        )
+
+    def riepiloghi_ispezione(
+        self, utente_id: int, ispezione_id: int, limite: int = 20
+    ) -> list[RiepilogoSalvato]:
+        """I riepiloghi salvati di un'ispezione dell'utente, dal più recente.
+
+        Il JSON salvato si rilegge con lo stesso schema con cui è stato validato. Una riga che non
+        lo rispetta più (uno schema cambiato dopo) si salta e si scrive nel log: non si mostra un
+        riepilogo che il codice di oggi non saprebbe leggere.
+
+        Raises:
+            ValidationError: id non validi.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        identificativo = _id_positivo(ispezione_id, "ispezione_id", obbligatorio=True)
+        salvati = []
+        for riga in self._riepiloghi.elenco(utente, identificativo, limite):
+            try:
+                riepilogo = valida_riepilogo(riga["riepilogo_json"])
+            except RiepilogoNonValido as errore:
+                logger.warning("Riepilogo %s non più leggibile: %s", riga["id"], errore)
+                continue
+            salvati.append(
+                RiepilogoSalvato(
+                    id=riga["id"],
+                    ispezione_id=riga["ispezione_id"],
+                    riepilogo=riepilogo,
+                    provider=riga["provider"],
+                    modello=riga["modello"],
+                    versione_prompt=riga["versione_prompt"],
+                    durata_ms=int(riga["durata_ms"]),
+                    token_prompt=riga["token_prompt"],
+                    token_risposta=riga["token_risposta"],
+                    tentativi=int(riga["tentativi"]),
+                    creato_il=riga["creato_il"],
+                )  # fmt: skip
+            )
+        return salvati
+
     def riepilogo_salvato(self, utente_id: int, ispezione_id: int) -> Riga | None:
         """L'ultimo riepilogo salvato di un'ispezione dell'utente, o None se non ce n'è."""
         utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
@@ -1050,4 +1129,5 @@ def crea_servizi(configurazione: Config | None = None) -> Servizi:
         crea_predittore=lambda: Predittore(cfg.percorso_modello),
         crea_llm=lambda: crea_client(cfg.llm),
         descrizione_llm=cfg.llm.descrizione(),
+        timeout_llm=cfg.llm.timeout,
     )

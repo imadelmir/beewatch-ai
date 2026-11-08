@@ -332,3 +332,38 @@ def test_servizio_su_ispezione_senza_note_non_chiama_il_modello(
             utente, ispezione_id
         )
     assert client.chiamate == []
+
+
+# --------------------------------------------------------------------------- #
+# M6-T6: l'elenco dei riepiloghi di un'ispezione
+# --------------------------------------------------------------------------- #
+
+
+def test_elenco_va_dal_piu_recente_e_rispetta_il_limite(
+    repository: RiepiloghiRepository, ispezione_di
+) -> None:
+    utente, ispezione_id = ispezione_di()
+    altro_utente, altra_ispezione = ispezione_di()
+    ids = [salva(repository, utente, ispezione_id, modello=f"m{n}") for n in range(3)]
+    salva(repository, altro_utente, altra_ispezione)
+
+    elenco = repository.elenco(utente, ispezione_id)
+
+    assert [r["id"] for r in elenco] == list(reversed(ids))
+    assert elenco[0]["riepilogo_json"] == RIEPILOGO  # il JSON torna identico, emoji compresa
+    assert [r["id"] for r in repository.elenco(utente, ispezione_id, limite=2)] == ids[:0:-1]
+    assert repository.elenco(altro_utente, ispezione_id) == []  # l'ispezione non è sua
+
+
+def test_servizio_storico_dei_riepiloghi_con_mysql(database_test: Database, ispezione_di) -> None:
+    utente, ispezione_id = ispezione_di()
+    servizi = Servizi(database_test, crea_llm=lambda: LLMFinto([json.dumps(RIEPILOGO)]))
+    primo = servizi.genera_riepilogo_ispezione(utente, ispezione_id)
+    secondo = servizi.genera_riepilogo_ispezione(utente, ispezione_id)
+
+    storico = servizi.riepiloghi_ispezione(utente, ispezione_id)
+
+    assert [r.id for r in storico] == [secondo.id, primo.id]
+    assert storico[0].riepilogo == secondo.riepilogo
+    assert storico[0].versione_prompt == versione_prompt()
+    assert storico[0].creato_il is not None
