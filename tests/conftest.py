@@ -313,3 +313,16 @@ def copia_artefatto(artefatto_sintetico, tmp_path: Path) -> Path:
     shutil.copy(artefatto_sintetico.percorso, destinazione)
     shutil.copy(percorso_metadati(artefatto_sintetico.percorso), percorso_metadati(destinazione))
     return destinazione
+
+
+# --------------------------------------------------------------------------- #
+# Interfaccia Streamlit (M6)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def app_pronta(monkeypatch: pytest.MonkeyPatch):
+    """Il modulo `avvio` di `app/`, pronto per `AppTest`: percorso degli import e cache pulite."""
+    from app_finta import prepara_app  # qui e non in cima: Streamlit serve solo a questi test
+
+    yield from prepara_app(monkeypatch)
