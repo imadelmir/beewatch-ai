@@ -52,7 +52,7 @@ from beewatch.exceptions import (
     ValidationError,
 )
 from beewatch.logging_config import ottieni_logger
-from beewatch.models import StatoAlveare
+from beewatch.models import LivelloRischio, StatoAlveare
 from beewatch.services import ApiarioScelta
 
 logger = ottieni_logger("beewatch.app.ui")
@@ -126,6 +126,15 @@ STILI_STATO: dict[StatoAlveare, tuple[str, str, str, str]] = {
     StatoAlveare.MORTO: ("Morto", "✖", CRITICO, "#FFFFFF"),
 }
 STILE_SCONOSCIUTO = ("Stato sconosciuto", "?", NEUTRO, "#FFFFFF")
+
+# I livelli di rischio di un'ispezione, con le parole della tabella `livelli_rischio`.
+ETICHETTE_RISCHIO: dict[LivelloRischio, str] = {
+    LivelloRischio.NESSUNO: "Nessun rischio",
+    LivelloRischio.BASSO: "Rischio basso",
+    LivelloRischio.MEDIO: "Rischio medio",
+    LivelloRischio.ALTO: "Rischio alto",
+}
+RISCHIO_SCONOSCIUTO = "Rischio sconosciuto"
 
 # --------------------------------------------------------------------------- #
 # Errori: che cosa è andato storto e che cosa può fare l'utente (specifica §11)
@@ -309,11 +318,12 @@ def metrica(
     """`st.metric` uniforme: numero all'italiana, unità accanto, delta con la stessa unità.
 
     `unita` è obbligatoria anche quando non c'è (`None` per un conteggio): così non si dimentica.
-    Un valore mancante si mostra come «—», mai come zero.
+    Un valore mancante si mostra come «—», mai come zero. Una data si scrive all'italiana.
     """
+    testo = formatta_data(valore) if isinstance(valore, date) else formatta_numero(valore)
     st.metric(
         etichetta,
-        _con_unita(formatta_numero(valore), unita),
+        _con_unita(testo, unita),
         delta=_delta(delta, unita),
         help=aiuto,
         border=True,
@@ -341,6 +351,14 @@ def stile_stato(stato: StatoAlveare | str | None) -> tuple[str, str, str, str]:
         return STILI_STATO[StatoAlveare(stato)]
     except ValueError:
         return STILE_SCONOSCIUTO
+
+
+def etichetta_rischio(livello: LivelloRischio | str | None) -> str:
+    """Il livello di rischio a parole («Rischio medio»), mai il codice grezzo."""
+    try:
+        return ETICHETTE_RISCHIO[LivelloRischio(livello)]
+    except ValueError:
+        return RISCHIO_SCONOSCIUTO
 
 
 def badge_stato(stato: StatoAlveare | str | None) -> None:

@@ -1,4 +1,4 @@
-"""Apiari e alveari in memoria, con le stesse regole dei repository veri (M6-T3).
+"""Apiari, alveari e ispezioni in memoria, con le regole dei repository veri (M6-T3, M6-T4).
 
 Servono ai test dei servizi e della pagina Alveari, senza database. Riproducono ciò che i
 repository controllano con le query (`beewatch/repositories.py`): appartenenza all'utente, nome
@@ -15,7 +15,7 @@ from datetime import date
 from decimal import Decimal
 
 from beewatch.exceptions import DatabaseError, ValidationError
-from beewatch.models import Alveare, Apiario, StatoAlveare
+from beewatch.models import Alveare, Apiario, Ispezione, LivelloRischio, StatoAlveare
 
 
 class ApiariInMemoria:
@@ -165,6 +165,69 @@ class AlveariInMemoria:
         if alveare is None:
             raise ValidationError("Alveare non trovato.", campo="id")
         self.righe[alveare_id] = replace(alveare, attivo=False)
+
+
+class IspezioniInMemoria:
+    """Le ispezioni degli alveari di `alveari`, come `IspezioniRepository`.
+
+    Come il repository vero, `crea` controlla solo che l'alveare sia dell'utente (non che sia
+    attivo: quello lo aggiunge il servizio) e l'elenco va dalla più recente.
+    """
+
+    def __init__(
+        self, alveari: AlveariInMemoria, *ispezioni: Ispezione, errore: Exception | None = None
+    ) -> None:
+        self.alveari = alveari
+        self.righe: dict[int, Ispezione] = {i.id: i for i in ispezioni}
+        self.errore = errore
+
+    def _prova(self) -> None:
+        if self.errore:
+            raise self.errore
+
+    def crea(self, utente_id: int, ispezione: Ispezione) -> Ispezione:
+        self._prova()
+        if not self.alveari._dell_utente(utente_id, ispezione.alveare_id):
+            raise ValidationError("Alveare non trovato.", campo="alveare_id")
+        nuova = replace(ispezione, id=max(self.righe, default=0) + 1)
+        self.righe[nuova.id] = nuova
+        return nuova
+
+    def ispezioni_per_alveare(self, utente_id: int, alveare_id: int) -> list[Ispezione]:
+        self._prova()
+        if not self.alveari._dell_utente(utente_id, alveare_id):
+            return []
+        scelte = [i for i in self.righe.values() if i.alveare_id == alveare_id]
+        return sorted(scelte, key=lambda i: (i.data_ispezione, i.id), reverse=True)
+
+
+NOTA_LUNGA = (
+    "Covata compatta e opercolata su sei telaini, uova fresche: la regina c'è e depone. "
+    "Scorte di miele e polline abbondanti ai lati; api calme, nessun segno di saccheggio. "
+) * 15 + "Varroa: caduta naturale bassa sul vassoio. Perché no? Più avanti si vedrà — è così."
+
+
+def ispezioni_di_prova(alveari: AlveariInMemoria, errore: Exception | None = None):
+    """Quattro ispezioni di Collina (A1 e A2), una dell'alveare eliminato A9, una altrui."""
+    return IspezioniInMemoria(
+        alveari,
+        Ispezione(alveare_id=1, data_ispezione=date(2026, 9, 12), id=101,
+                  livello_rischio=LivelloRischio.NESSUNO, peso_kg=Decimal("41.20"),
+                  telaini_covata=6, telaini_scorte=4, regina_vista=True, note=NOTA_LUNGA),
+        Ispezione(alveare_id=2, data_ispezione=date(2026, 10, 5), id=102,
+                  livello_rischio=LivelloRischio.ALTO, telaini_covata=2,
+                  note="Varroa *alta* sul vassoio: trattamento da programmare."),
+        Ispezione(alveare_id=1, data_ispezione=date(2026, 10, 30), id=103,
+                  livello_rischio=LivelloRischio.BASSO, peso_kg=Decimal("38.50"),
+                  sciamatura=True),
+        Ispezione(alveare_id=2, data_ispezione=date(2026, 8, 20), id=104,
+                  livello_rischio=LivelloRischio.MEDIO),
+        Ispezione(alveare_id=9, data_ispezione=date(2026, 10, 1), id=105,
+                  livello_rischio=LivelloRischio.ALTO),
+        Ispezione(alveare_id=30, data_ispezione=date(2026, 10, 2), id=106,
+                  livello_rischio=LivelloRischio.NESSUNO),
+        errore=errore,
+    )  # fmt: skip
 
 
 def anagrafica_di_prova(

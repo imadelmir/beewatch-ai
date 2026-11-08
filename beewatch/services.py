@@ -50,7 +50,14 @@ from beewatch.logging_config import ottieni_logger
 from beewatch.ml.artefatto import percorso_per_la_tabella, riga_tabella_modelli
 from beewatch.ml.features import FEATURE, TARGET, costruisci_feature_storiche
 from beewatch.ml.predictor import Predittore
-from beewatch.models import Alveare, Apiario, Previsione, StatoAlveare
+from beewatch.models import (
+    Alveare,
+    Apiario,
+    Ispezione,
+    LivelloRischio,
+    Previsione,
+    StatoAlveare,
+)
 from beewatch.repositories import (
     AlveariRepository,
     ApiariRepository,
@@ -153,6 +160,23 @@ class AlveareInElenco:
 
 
 @dataclass(frozen=True)
+class IspezioneInElenco:
+    """Una riga dello storico delle ispezioni, con il codice dell'alveare a cui si riferisce."""
+
+    id: int
+    alveare_id: int
+    codice_alveare: str
+    data_ispezione: date
+    livello_rischio: LivelloRischio
+    peso_kg: float | None
+    telaini_covata: int | None
+    telaini_scorte: int | None
+    regina_vista: bool
+    sciamatura: bool
+    note: str | None
+
+
+@dataclass(frozen=True)
 class RiepilogoGenerato:
     """Il riepilogo AI di un'ispezione, con ciò che serve a mostrarlo e a tracciarlo.
 
@@ -196,6 +220,17 @@ def _numero(valore: float) -> float | None:
         if valore is None or (isinstance(valore, float) and math.isnan(valore))
         else float(valore)
     )
+
+
+def _in_elenco(ispezione: Ispezione, codice_alveare: str) -> IspezioneInElenco:
+    peso = ispezione.peso_kg
+    return IspezioneInElenco(
+        id=ispezione.id, alveare_id=ispezione.alveare_id, codice_alveare=codice_alveare,
+        data_ispezione=ispezione.data_ispezione, livello_rischio=ispezione.livello_rischio,
+        peso_kg=None if peso is None else float(peso), telaini_covata=ispezione.telaini_covata,
+        telaini_scorte=ispezione.telaini_scorte, regina_vista=ispezione.regina_vista,
+        sciamatura=ispezione.sciamatura, note=ispezione.note,
+    )  # fmt: skip
 
 
 class Servizi:
@@ -476,6 +511,89 @@ class Servizi:
         alveare = _id_positivo(alveare_id, "alveare_id", obbligatorio=True)
         self._alveari.disattiva(utente, alveare)
         logger.info("Alveare %s disattivato dall'utente %s", alveare, utente)
+
+    # ----------------------------------------------------------------------- #
+    # Ispezioni
+    # ----------------------------------------------------------------------- #
+
+    def ispezioni_dell_apiario(
+        self,
+        utente_id: int,
+        apiario_id: int,
+        *,
+        alveare_id: int | None = None,
+        dal: date | None = None,
+        al: date | None = None,
+    ) -> list[IspezioneInElenco]:
+        """Lo storico delle ispezioni degli alveari attivi di un apiario, dalla più recente.
+
+        `alveare_id` lo restringe a un alveare; `dal` e `al` (compresi) a un intervallo di date.
+        Un apiario o un alveare di un altro utente danno un elenco vuoto, come per gli alveari.
+        Legge un alveare alla volta (`ispezioni_per_alveare`): un apiario ne ha qualche decina
+        al massimo, e il repository resta com'è.
+
+        Raises:
+            ValidationError: id non validi, date non valide o `dal` dopo `al`.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        apiario = _id_positivo(apiario_id, "apiario_id", obbligatorio=True)
+        solo = _id_positivo(alveare_id, "alveare_id", obbligatorio=False)
+        for valore, campo in ((dal, "dal"), (al, "al")):
+            if valore is not None and not isinstance(valore, date):
+                raise ValidationError(f"Il campo «{campo}» deve essere una data.", campo=campo)
+        if dal is not None and al is not None and dal > al:
+            raise ValidationError(
+                "La data d'inizio («dal») viene dopo quella di fine («al»).", campo="dal"
+            )
+        storico = []
+        for alveare in self._alveari.trova_alveari_attivi(utente):
+            if alveare.apiario_id != apiario or solo not in (None, alveare.id):
+                continue
+            for ispezione in self._ispezioni.ispezioni_per_alveare(utente, alveare.id):
+                giorno = ispezione.data_ispezione
+                if (dal is None or giorno >= dal) and (al is None or giorno <= al):
+                    storico.append(_in_elenco(ispezione, alveare.codice))
+        return sorted(storico, key=lambda i: (i.data_ispezione, i.id), reverse=True)
+
+    def registra_ispezione(
+        self,
+        utente_id: int,
+        *,
+        alveare_id: int,
+        data_ispezione: date,
+        livello_rischio: LivelloRischio | str,
+        peso_kg: Any = None,
+        telaini_covata: int | None = None,
+        telaini_scorte: int | None = None,
+        regina_vista: bool = False,
+        sciamatura: bool = False,
+        note: str | None = None,
+    ) -> Ispezione:
+        """Registra una visita a un alveare attivo dell'utente e la restituisce con il suo id.
+
+        Il modello rifiuta la data futura, i numeri fuori intervallo e le note oltre i 65.535
+        byte; qui si aggiunge che l'alveare deve essere uno di quelli attivi dell'utente.
+
+        Raises:
+            ValidationError: campo non valido, alveare inesistente, eliminato o non suo.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        ispezione = Ispezione(
+            alveare_id=alveare_id, data_ispezione=data_ispezione,
+            livello_rischio=livello_rischio, peso_kg=peso_kg, telaini_covata=telaini_covata,
+            telaini_scorte=telaini_scorte, regina_vista=regina_vista, sciamatura=sciamatura,
+            note=note,
+        )  # fmt: skip
+        if all(a.id != ispezione.alveare_id for a in self._alveari.trova_alveari_attivi(utente)):
+            raise ValidationError(
+                "Alveare non trovato fra quelli attivi: forse è stato eliminato.",
+                campo="alveare_id",
+            )
+        nuova = self._ispezioni.crea(utente, ispezione)
+        logger.info("Ispezione %s registrata per l'alveare %s", nuova.id, nuova.alveare_id)
+        return nuova
 
     # ----------------------------------------------------------------------- #
     # Previsione della produzione
