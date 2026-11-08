@@ -28,6 +28,7 @@ import math
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 import numpy as np
@@ -49,7 +50,7 @@ from beewatch.logging_config import ottieni_logger
 from beewatch.ml.artefatto import percorso_per_la_tabella, riga_tabella_modelli
 from beewatch.ml.features import FEATURE, TARGET, costruisci_feature_storiche
 from beewatch.ml.predictor import Predittore
-from beewatch.models import Previsione
+from beewatch.models import Alveare, Apiario, Previsione, StatoAlveare
 from beewatch.repositories import (
     AlveariRepository,
     ApiariRepository,
@@ -134,6 +135,21 @@ class StatoModello:
     mae_kg: float  # l'errore medio sul 2010–2012
     addestrato_il: str
     righe_addestramento: int
+
+
+@dataclass(frozen=True)
+class AlveareInElenco:
+    """Un alveare attivo come lo mostra la pagina Alveari: anagrafica e ultima ispezione (Q2)."""
+
+    id: int
+    apiario_id: int
+    codice: str
+    stato: StatoAlveare
+    data_installazione: date | None
+    anno_regina: int | None
+    note: str | None
+    ultima_ispezione: date | None
+    peso_kg: float | None  # il peso registrato nell'ultima ispezione
 
 
 @dataclass(frozen=True)
@@ -290,6 +306,176 @@ class Servizi:
             addestrato_il=str(metadati["addestrato_il"]),
             righe_addestramento=int(metadati["addestramento"]["righe"]),
         )
+
+    # ----------------------------------------------------------------------- #
+    # Anagrafica: apiari e alveari (M6-T3)
+    # ----------------------------------------------------------------------- #
+    # La cancellazione è logica (`attivo = FALSE`): ispezioni, raccolti e previsioni di un
+    # alveare restano nello storico e i numeri passati non cambiano. I controlli sui valori
+    # stanno nei modelli (`Apiario`, `Alveare`), quelli che richiedono il database (nome o codice
+    # già usati, apiario di un altro utente) nei repository: qui si traducono gli argomenti.
+
+    def apiari_in_anagrafica(self, utente_id: int) -> list[Apiario]:
+        """Gli apiari attivi dell'utente con tutti i campi, per l'anagrafica (anche coordinate)."""
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        return self._apiari.elenca(utente)
+
+    def crea_apiario(
+        self,
+        utente_id: int,
+        *,
+        nome: str,
+        localita: str | None = None,
+        latitudine: Any = None,
+        longitudine: Any = None,
+        note: str | None = None,
+    ) -> Apiario:
+        """Registra un apiario e lo restituisce con il suo id.
+
+        Raises:
+            ValidationError: un campo non valido, o un altro apiario con lo stesso nome.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        apiario = Apiario(
+            utente_id=utente, nome=nome, localita=localita, latitudine=latitudine,
+            longitudine=longitudine, note=note,
+        )  # fmt: skip
+        nuovo = self._apiari.crea(apiario)
+        logger.info("Apiario %s creato per l'utente %s", nuovo.id, utente)
+        return nuovo
+
+    def aggiorna_apiario(
+        self,
+        utente_id: int,
+        apiario_id: int,
+        *,
+        nome: str,
+        localita: str | None = None,
+        latitudine: Any = None,
+        longitudine: Any = None,
+        note: str | None = None,
+    ) -> Apiario:
+        """Sostituisce i campi di un apiario dell'utente (che resta attivo).
+
+        Raises:
+            ValidationError: campo non valido, nome già usato, apiario non dell'utente.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        apiario = Apiario(
+            utente_id=utente, nome=nome, localita=localita, latitudine=latitudine,
+            longitudine=longitudine, note=note,
+            id=_id_positivo(apiario_id, "apiario_id", obbligatorio=True),
+        )  # fmt: skip
+        self._apiari.aggiorna(apiario)
+        return apiario
+
+    def elimina_apiario(self, utente_id: int, apiario_id: int) -> None:
+        """Toglie un apiario dagli elenchi (cancellazione logica: lo storico resta).
+
+        Raises:
+            ValidationError: apiario inesistente o di un altro utente.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        apiario = _id_positivo(apiario_id, "apiario_id", obbligatorio=True)
+        self._apiari.disattiva(utente, apiario)
+        logger.info("Apiario %s disattivato dall'utente %s", apiario, utente)
+
+    def alveari_dell_apiario(self, utente_id: int, apiario_id: int) -> list[AlveareInElenco]:
+        """Gli alveari attivi di un apiario, per codice, con data e peso dell'ultima ispezione.
+
+        Un apiario di un altro utente (o disattivato) dà un elenco vuoto: non si rivela che esiste.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        apiario = _id_positivo(apiario_id, "apiario_id", obbligatorio=True)
+        ultime = {r["id"]: r for r in self._alveari.elenco_con_ultima_ispezione(utente)}
+        elenco = []
+        for alveare in self._alveari.trova_alveari_attivi(utente):
+            if alveare.apiario_id != apiario:
+                continue
+            ultima = ultime.get(alveare.id, {})
+            peso = ultima.get("peso_kg")
+            elenco.append(
+                AlveareInElenco(
+                    id=alveare.id,
+                    apiario_id=alveare.apiario_id,
+                    codice=alveare.codice,
+                    stato=alveare.stato,
+                    data_installazione=alveare.data_installazione,
+                    anno_regina=alveare.anno_regina,
+                    note=alveare.note,
+                    ultima_ispezione=ultima.get("ultima_ispezione"),
+                    peso_kg=None if peso is None else float(peso),
+                )  # fmt: skip
+            )
+        return sorted(elenco, key=lambda a: a.codice)
+
+    def crea_alveare(
+        self,
+        utente_id: int,
+        *,
+        apiario_id: int,
+        codice: str,
+        stato: StatoAlveare | str,
+        data_installazione: date | None = None,
+        anno_regina: int | None = None,
+        note: str | None = None,
+    ) -> Alveare:
+        """Registra un alveare in un apiario dell'utente e lo restituisce con il suo id.
+
+        Raises:
+            ValidationError: campo non valido, codice già usato nell'apiario, apiario non suo.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        alveare = Alveare(
+            apiario_id=apiario_id, codice=codice, stato=stato,
+            data_installazione=data_installazione, anno_regina=anno_regina, note=note,
+        )  # fmt: skip
+        nuovo = self._alveari.crea(utente, alveare)
+        logger.info("Alveare %s creato nell'apiario %s", nuovo.id, nuovo.apiario_id)
+        return nuovo
+
+    def aggiorna_alveare(
+        self,
+        utente_id: int,
+        alveare_id: int,
+        *,
+        apiario_id: int,
+        codice: str,
+        stato: StatoAlveare | str,
+        data_installazione: date | None = None,
+        anno_regina: int | None = None,
+        note: str | None = None,
+    ) -> Alveare:
+        """Sostituisce i campi di un alveare dell'utente; può spostarlo in un altro suo apiario.
+
+        Raises:
+            ValidationError: campo non valido, codice già usato, alveare o apiario non suoi.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        alveare = Alveare(
+            apiario_id=apiario_id, codice=codice, stato=stato,
+            data_installazione=data_installazione, anno_regina=anno_regina, note=note,
+            id=_id_positivo(alveare_id, "alveare_id", obbligatorio=True),
+        )  # fmt: skip
+        self._alveari.aggiorna(utente, alveare)
+        return alveare
+
+    def elimina_alveare(self, utente_id: int, alveare_id: int) -> None:
+        """Toglie un alveare dagli elenchi (cancellazione logica: le ispezioni restano).
+
+        Raises:
+            ValidationError: alveare inesistente o di un altro utente.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        alveare = _id_positivo(alveare_id, "alveare_id", obbligatorio=True)
+        self._alveari.disattiva(utente, alveare)
+        logger.info("Alveare %s disattivato dall'utente %s", alveare, utente)
 
     # ----------------------------------------------------------------------- #
     # Previsione della produzione

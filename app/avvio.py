@@ -27,7 +27,15 @@ import streamlit as st
 
 from beewatch.exceptions import BeeWatchError
 from beewatch.logging_config import configura, ottieni_logger
-from beewatch.services import ApiarioScelta, Panoramica, Servizi, StatoModello, crea_servizi
+from beewatch.models import Apiario
+from beewatch.services import (
+    AlveareInElenco,
+    ApiarioScelta,
+    Panoramica,
+    Servizi,
+    StatoModello,
+    crea_servizi,
+)
 
 # Sotto `beewatch.`, così eredita le impostazioni di `configura()` (file di log, livello): un logger
 # chiamato «avvio» (il nome del modulo, che Streamlit carica a sé) non scriverebbe da nessuna parte.
@@ -46,6 +54,9 @@ CHIAVE_APIARIO_ATTIVO = "apiario_attivo_id"
 # dimentica lo stato di un widget quando si cambia pagina: la scelta vera vive nella chiave non
 # legata a widget, e il selettore la ricopia a ogni esecuzione (vedi `prepara_selettore_apiario`).
 CHIAVE_SELETTORE_APIARIO = "selettore_apiario"
+# L'esito dell'ultima scrittura («Alveare A3 aggiunto»): dopo una scrittura la pagina si riesegue
+# da capo (`st.rerun`) per mostrare i dati nuovi, e il messaggio deve sopravvivere a quel giro.
+CHIAVE_ESITO = "esito_operazione"
 
 
 # --------------------------------------------------------------------------- #
@@ -91,6 +102,18 @@ def apiari(utente_id: int) -> tuple[ApiarioScelta, ...]:
     return tuple(servizi().elenca_apiari(utente_id))
 
 
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def apiari_in_anagrafica(utente_id: int) -> tuple[Apiario, ...]:
+    """Gli apiari con tutti i campi, per la pagina Alveari (sola lettura, `TTL_LETTURE_SECONDI`)."""
+    return tuple(servizi().apiari_in_anagrafica(utente_id))
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def alveari_dell_apiario(utente_id: int, apiario_id: int) -> tuple[AlveareInElenco, ...]:
+    """Gli alveari attivi di un apiario, con l'ultima ispezione (sola lettura, in cache)."""
+    return tuple(servizi().alveari_dell_apiario(utente_id, apiario_id))
+
+
 def svuota_letture() -> None:
     """Dimentica tutte le letture in cache: da chiamare subito dopo una scrittura."""
     st.cache_data.clear()
@@ -106,10 +129,12 @@ def inizializza_stato() -> None:
 
     - `utente_id`: l'utente corrente (DA-02: quello dimostrativo);
     - `apiario_attivo_id`: l'apiario scelto, il contesto di tutte le pagine; `None` finché non si
-      sa quali apiari esistono (lo imposta `scegli_apiario_iniziale`).
+      sa quali apiari esistono (lo imposta `scegli_apiario_iniziale`);
+    - `esito_operazione`: il messaggio dell'ultima scrittura riuscita, finché non si mostra.
     """
     st.session_state.setdefault(CHIAVE_UTENTE, UTENTE_DEMO_ID)
     st.session_state.setdefault(CHIAVE_APIARIO_ATTIVO, None)
+    st.session_state.setdefault(CHIAVE_ESITO, None)
 
 
 def scegli_apiario_iniziale(apiari: tuple[ApiarioScelta, ...]) -> None:
@@ -138,6 +163,34 @@ def prepara_selettore_apiario() -> None:
 def al_cambio_apiario() -> None:
     """Callback del selettore: la scelta dell'utente diventa l'apiario attivo di tutte le pagine."""
     st.session_state[CHIAVE_APIARIO_ATTIVO] = st.session_state[CHIAVE_SELETTORE_APIARIO]
+
+
+def imposta_apiario_attivo(apiario_id: int) -> None:
+    """Rende attivo un apiario (per esempio quello appena creato) su tutte le pagine."""
+    st.session_state[CHIAVE_APIARIO_ATTIVO] = apiario_id
+
+
+# --------------------------------------------------------------------------- #
+# Dopo una scrittura
+# --------------------------------------------------------------------------- #
+
+
+def scrittura_riuscita(messaggio: str) -> None:
+    """Chiude una scrittura riuscita: letture da rifare, esito da mostrare, pagina da rieseguire.
+
+    `st.rerun()` interrompe l'esecuzione: va chiamata per ultima, fuori da un `try` che intercetti
+    tutto. Al giro dopo la pagina mostra l'esito con `prendi_esito()` e i dati già aggiornati.
+    """
+    svuota_letture()
+    st.session_state[CHIAVE_ESITO] = messaggio
+    st.rerun()
+
+
+def prendi_esito() -> str | None:
+    """L'esito dell'ultima scrittura, una volta sola: dopo averlo letto non c'è più."""
+    messaggio = st.session_state[CHIAVE_ESITO]
+    st.session_state[CHIAVE_ESITO] = None
+    return messaggio
 
 
 # --------------------------------------------------------------------------- #

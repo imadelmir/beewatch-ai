@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import html
 import math
+from datetime import date
 from decimal import Decimal
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
@@ -196,6 +197,11 @@ def formatta_numero(valore: Any, decimali: int | None = None) -> str:
         decimali = 0 if isinstance(valore, int) else 1
     testo = f"{valore:,.{decimali}f}"
     return testo.replace(",", " ").replace(".", ",")
+
+
+def formatta_data(giorno: date | None) -> str:
+    """Una data come la scrive un italiano: `30/10/2026`. Mancante → «—»."""
+    return DATO_MANCANTE if giorno is None else giorno.strftime("%d/%m/%Y")
 
 
 def _con_unita(testo: str, unita: str | None) -> str:

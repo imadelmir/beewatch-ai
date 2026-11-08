@@ -76,6 +76,14 @@ class AlveariFinti:
     def trascurati(self, utente_id: int) -> list[dict]:
         return [{"id": 3, "codice": "A3"}, {"id": 5, "codice": "B1"}]
 
+    # La pagina Alveari (M6-T3) chiede anche questi: qui nessun alveare da elencare. I test
+    # della pagina usano l'anagrafica in memoria di `anagrafica_finta.py`.
+    def trova_alveari_attivi(self, utente_id: int) -> list:
+        return []
+
+    def elenco_con_ultima_ispezione(self, utente_id: int) -> list[dict]:
+        return []
+
 
 class PredittoreStub:
     versione = "v-stub"

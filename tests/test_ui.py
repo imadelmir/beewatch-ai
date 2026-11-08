@@ -51,6 +51,8 @@ SPEC = RADICE / "docs" / "markdown" / "M6-interfaccia" / "ui_spec.md"
 UI = APP / "ui.py"
 HOME = APP / "Home.py"
 SCHERMATE = [HOME, *PAGINE]  # la Home e le sei pagine
+# Le pagine che leggono il database (le altre leggono solo il modello di previsione).
+COL_DATABASE = {p.name for p in PAGINE} - {"3_Previsione.py", "6_Trasparenza.py"}
 
 CATALOGO = {
     "intestazione": ["titolo", "descrizione"],
@@ -672,7 +674,7 @@ def test_ogni_pagina_regge_il_database_spento(app_pronta, monkeypatch, pagina):
 
     assert not at.exception
     assert len(at.title) == 1
-    if "panoramica" in pagina.read_text(encoding="utf-8"):
+    if pagina.name in COL_DATABASE:
         [errore] = valori(at.error)
         assert errore.startswith("**Non riesco a raggiungere il database.**")
         assert not at.metric  # niente numeri inventati
@@ -704,5 +706,5 @@ def test_ogni_pagina_regge_il_database_vuoto(app_pronta, monkeypatch, pagina):
     at = esegui(pagina)
 
     assert not at.exception and not at.error
-    if "panoramica" in pagina.read_text(encoding="utf-8"):
+    if pagina.name in COL_DATABASE:
         assert any(t.startswith("Nessun apiario registrato.") for t in valori(at.info))
