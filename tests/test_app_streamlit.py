@@ -32,6 +32,8 @@ from beewatch.exceptions import ConfigError, DatabaseError, ModelError
 from beewatch.ml.predictor import Predittore
 
 MODELLO_COMMITTATO = RADICE / "models" / "produzione_v1.joblib"
+# Le pagine ancora scheletro: le altre hanno il loro contenuto (da M6-T3 in poi).
+IN_COSTRUZIONE = {p.name for p in PAGINE} - {"1_Alveari.py"}
 
 
 # --------------------------------------------------------------------------- #
@@ -149,16 +151,15 @@ def test_senza_il_file_del_modello_la_home_funziona_e_avvisa(app_pronta, monkeyp
 
 
 @pytest.mark.parametrize("pagina", PAGINE, ids=lambda p: p.name)
-def test_ogni_pagina_parte_con_lo_stato_pronto_e_dice_che_e_in_costruzione(
-    app_pronta, monkeypatch, pagina
-):
+def test_ogni_pagina_parte_con_lo_stato_pronto(app_pronta, monkeypatch, pagina):
     installa(app_pronta, monkeypatch, servizi_finti())
 
     at = esegui(pagina)
 
     assert not at.exception
     assert len(at.title) == 1
-    assert any("in costruzione" in t for t in valori(at.info))
+    if pagina.name in IN_COSTRUZIONE:
+        assert any("in costruzione" in t for t in valori(at.info))
     assert at.session_state["utente_id"] == 1  # lo stato è stato inizializzato anche qui
 
 

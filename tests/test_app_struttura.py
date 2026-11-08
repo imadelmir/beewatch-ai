@@ -125,15 +125,21 @@ def test_il_punto_di_ingresso_e_home_py_e_main_py_non_esiste_piu():
 
 @pytest.mark.parametrize("pagina", SEI_PAGINE)
 def test_ogni_pagina_parte_con_avvia(pagina):
-    corpo = [
-        n for n in albero(PAGINE / pagina).body if not isinstance(n, ast.Import | ast.ImportFrom)
-    ]
-    corpo = [
-        n for n in corpo if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))
-    ]
-    prima = corpo[0]
-    assert isinstance(prima, ast.Expr) and isinstance(prima.value, ast.Call), pagina
-    assert prima.value.func.id == "avvia", pagina  # il primo comando è l'avvio comune
+    # `avvia` contiene `st.set_page_config`, che dev'essere il primo comando Streamlit: prima
+    # possono stare solo import, docstring, definizioni di funzioni e costanti senza chiamate.
+    def eseguita(nodo: ast.stmt) -> bool:
+        if isinstance(nodo, ast.Import | ast.ImportFrom | ast.FunctionDef | ast.ClassDef):
+            return False
+        if isinstance(nodo, ast.Expr) and isinstance(nodo.value, ast.Constant):
+            return False  # docstring
+        if isinstance(nodo, ast.Assign) and "st." not in ast.unparse(nodo.value):
+            return isinstance(nodo.value, ast.Call) and "avvia" in ast.unparse(nodo.value)
+        return True
+
+    prima = next(n for n in albero(PAGINE / pagina).body if eseguita(n))
+    chiamata = prima.value
+    assert isinstance(prima, ast.Expr | ast.Assign) and isinstance(chiamata, ast.Call), pagina
+    assert chiamata.func.id == "avvia", pagina  # il primo comando è l'avvio comune
     assert "avvio.avvia" in moduli_importati(PAGINE / pagina)
 
 
@@ -298,4 +304,5 @@ def test_lo_stato_della_sessione_nasce_solo_in_avvio_py():
 def test_lapiario_attivo_e_una_chiave_dello_stato_inizializzata_in_un_punto():
     sorgente = (APP / "avvio.py").read_text(encoding="utf-8")
     assert 'CHIAVE_APIARIO_ATTIVO = "apiario_attivo_id"' in sorgente
-    assert sorgente.count("st.session_state.setdefault(") == 2  # utente e apiario attivo
+    # utente, apiario attivo, esito dell'ultima scrittura (M6-T3)
+    assert sorgente.count("st.session_state.setdefault(") == 3
