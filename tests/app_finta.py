@@ -16,6 +16,7 @@ from types import ModuleType
 
 import pytest
 import streamlit as st
+from assistente_finto import RiepiloghiInMemoria
 from previsione_finta import ModelliFinti, PrevisioniInMemoria, ProduzioneFinta
 from streamlit.testing.v1 import AppTest
 
@@ -108,7 +109,8 @@ class IspezioniFinte:
             return []
         return [
             Ispezione(alveare_id=3, data_ispezione=date(2026, 10, 30), id=1,
-                      livello_rischio=LivelloRischio.BASSO, peso_kg=Decimal("38.50"))
+                      livello_rischio=LivelloRischio.BASSO, peso_kg=Decimal("38.50"),
+                      note="Covata compatta, scorte buone.")
         ]  # fmt: skip
 
 
@@ -139,6 +141,7 @@ def servizi_finti(
         produzione=ProduzioneFinta(),
         previsioni=PrevisioniInMemoria(),
         modelli=ModelliFinti(),
+        riepiloghi=RiepiloghiInMemoria(),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
     )
 

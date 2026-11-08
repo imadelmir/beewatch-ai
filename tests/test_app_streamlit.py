@@ -33,7 +33,8 @@ from beewatch.ml.predictor import Predittore
 
 MODELLO_COMMITTATO = RADICE / "models" / "produzione_v1.joblib"
 # Le pagine ancora scheletro: le altre hanno il loro contenuto (da M6-T3 in poi).
-IN_COSTRUZIONE = {p.name for p in PAGINE} - {"1_Alveari.py", "2_Ispezioni.py", "3_Previsione.py"}
+FATTE = {"1_Alveari.py", "2_Ispezioni.py", "3_Previsione.py", "4_Assistente_AI.py"}
+IN_COSTRUZIONE = {p.name for p in PAGINE} - FATTE
 
 
 # --------------------------------------------------------------------------- #

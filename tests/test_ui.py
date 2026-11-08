@@ -401,9 +401,10 @@ def test_metrica_formatta_valore_unita_delta_e_aiuto(app_pronta):
         from datetime import date  # AppTest esegue la funzione da sola: niente globali
 
         ui.metrica("Ultima ispezione", date(2026, 10, 30), None)
+        ui.metrica("Confidenza", "Media", None)
 
     at = script(corpo).run()
-    produzione, alveari, peso, crescita, scarto, ultima = at.metric
+    produzione, alveari, peso, crescita, scarto, ultima, confidenza = at.metric
     assert (produzione.label, produzione.value, produzione.delta) == (
         "Produzione",
         "1 234,5 kg",
@@ -415,6 +416,7 @@ def test_metrica_formatta_valore_unita_delta_e_aiuto(app_pronta):
     assert crescita.delta == "+3 kg"
     assert not scarto.delta  # un delta mancante non si mostra
     assert ultima.value == "30/10/2026"  # una data all'italiana, non un numero
+    assert confidenza.value == "Media"  # un testo resta com'è
 
 
 def test_etichetta_rischio_dice_il_livello_a_parole(ui):

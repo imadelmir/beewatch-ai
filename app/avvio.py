@@ -36,6 +36,7 @@ from beewatch.services import (
     IntervalloParametro,
     IspezioneInElenco,
     Panoramica,
+    RiepilogoSalvato,
     Servizi,
     StatoModello,
     StatoPrevedibile,
@@ -133,6 +134,12 @@ def ispezioni_dell_apiario(
             utente_id, apiario_id, alveare_id=alveare_id, dal=dal, al=al
         )
     )
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+def riepiloghi_ispezione(utente_id: int, ispezione_id: int) -> tuple[RiepilogoSalvato, ...]:
+    """I riepiloghi AI già salvati di un'ispezione, dal più recente (sola lettura, in cache)."""
+    return tuple(servizi().riepiloghi_ispezione(utente_id, ispezione_id))
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
