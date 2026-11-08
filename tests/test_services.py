@@ -461,6 +461,9 @@ def test_crea_servizi_usa_la_configurazione_senza_aprire_connessioni(monkeypatch
     assert isinstance(s, Servizi) and percorsi == []  # il modello non si carica adesso
     assert s.predittore == "p" and percorsi == [Path("m.joblib")]
     assert s.descrizione_llm == "llama3.1:8b via ollama (chiave: non richiesta)"
+    # timeout e provider locale arrivano dalla configurazione (M6-T6, M6-T8)
+    assert s.info_assistente().attesa_massima_s == 2 * 3 * 5
+    assert s.info_assistente().in_locale is True
 
 
 # --------------------------------------------------------------------------- #
