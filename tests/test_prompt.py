@@ -101,14 +101,14 @@ def test_i_prompt_sono_file_versionati_non_stringhe_nel_codice():
 def test_la_riga_della_versione_non_arriva_al_modello():
     for nome in ("system", "riepilogo"):
         p = carica_prompt(nome)
-        assert p.versione == "v1"
+        assert p.versione == "v2"
         assert "versione" not in p.testo.splitlines()[0].lower()
         assert "<!--" not in p.testo
 
 
 def test_le_versioni_dei_due_prompt_coincidono_e_stanno_nella_colonna():
     versione = versione_prompt()
-    assert versione == "v1"
+    assert versione == "v2"
     assert len(versione) <= 20  # messaggi.versione_prompt VARCHAR(20)
 
 
@@ -359,6 +359,60 @@ def test_controllo_stato_e_confidenza(script):
     assert len(alta) == 1 and "più alta" in alta[0]
 
 
+def test_le_attese_in_piu_si_leggono_e_sono_espressioni_valide(script):
+    import re as espressioni
+
+    attese = script.carica_attese()
+    assert attese["06_covata_sospetta"].azioni_devono_contenere  # la ASL per la covata sospetta
+    assert attese["01_regolare_breve"].testo_deve_contenere == ()  # facoltative
+    for nome, attesa in attese.items():
+        for lista in (
+            attesa.testo_deve_contenere,
+            attesa.testo_non_deve_contenere,
+            attesa.azioni_devono_contenere,
+            attesa.azioni_non_devono_contenere,
+        ):
+            for espressione in lista:
+                espressioni.compile(espressione)  # una regex rotta farebbe fallire la prova vera
+            assert isinstance(lista, tuple), nome
+
+
+def test_controllo_testo_che_deve_o_non_deve_comparire(script):
+    attesa = script.Attesa(
+        ("attenzione",),
+        None,
+        testo_deve_contenere=("recuperat",),
+        testo_non_deve_contenere=("buoi",),
+    )
+    buono = riepilogo_di(elementi_rilevati=["l'apicoltore ha già recuperato lo sciame"])
+    assert script.controlla_riepilogo(buono, attesa) == []
+    cattivo = riepilogo_di(elementi_rilevati=["buoi opercolari"])
+    falliti = script.controlla_riepilogo(cattivo, attesa)
+    assert "manca nel testo: «recuperat»" in falliti
+    assert "il testo contiene «buoi»" in falliti
+
+
+def test_controllo_azioni_obbligatorie_e_vietate(script):
+    attesa = script.Attesa(
+        ("attenzione",),
+        None,
+        azioni_devono_contenere=("ASL",),
+        azioni_non_devono_contenere=("stuzzicadent",),
+    )
+    con_asl = riepilogo_di(azioni_suggerite=[{"azione": "chiamare la asl", "priorita": "alta"}])
+    assert script.controlla_riepilogo(con_asl, attesa) == []  # maiuscole indifferenti
+    # «ASL» nel testo ma non in un'azione non basta
+    solo_testo = riepilogo_di(elementi_rilevati=["parlare con l'ASL"])
+    assert "nessuna azione con «ASL»" in script.controlla_riepilogo(solo_testo, attesa)
+    pericolosa = riepilogo_di(
+        azioni_suggerite=[
+            {"azione": "chiamare l'ASL", "priorita": "alta"},
+            {"azione": "provare con lo stuzzicadenti altre celle", "priorita": "alta"},
+        ]
+    )
+    assert script.controlla_riepilogo(pericolosa, attesa) == ["un'azione contiene «stuzzicadent»"]
+
+
 def test_controllo_senza_limite_di_confidenza(script):
     attesa = script.Attesa(("attenzione",), None)
     assert script.controlla_riepilogo(riepilogo_di(confidenza="alta"), attesa) == []
@@ -412,7 +466,7 @@ def test_lo_script_riassume_e_scrive_il_file(script, monkeypatch, tmp_path, caps
     fuori = capsys.readouterr().out
     assert codice == 0, fuori
     assert "OK 02_solo_ok" in fuori and "Superate 1 note su 1" in fuori
-    assert "Prova del prompt v1" in uscita.read_text(encoding="utf-8")
+    assert "Prova del prompt v2" in uscita.read_text(encoding="utf-8")
 
 
 def test_lo_script_esce_con_1_se_una_nota_non_supera_i_controlli(script, monkeypatch, capsys):

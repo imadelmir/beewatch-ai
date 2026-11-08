@@ -59,7 +59,7 @@ I codici sono gli stessi del backlog su GitHub e dei messaggi di commit.
 | M5-T1 | [Client LLM](markdown/M5-ai-generativa/M5-T1_client_llm.md) | `LLMClient` con Ollama e OpenRouter, factory, `OLLAMA_BASE_URL`, test con server finto, verifica reale ancora da fare |
 | M5-T2 | [Robustezza delle chiamate](markdown/M5-ai-generativa/M5-T2_robustezza_chiamate.md) | tentativi con backoff 1-2-4 s, `Retry-After` (max 30 s), tetto di tempo, solo `LLMError` verso l'interfaccia, mutation test |
 | M5-T3 | [Schema di output e parser](markdown/M5-ai-generativa/M5-T3_schema_e_parser.md) | schema del riepilogo, estrazione del JSON, validazione, un solo tentativo correttivo, fallback onesto |
-| M5-T4 | [Prompt engineering](markdown/M5-ai-generativa/M5-T4_prompt.md) · [`prompt_engineering.md`](prompt_engineering.md) | prompt versionati in file, tre tecniche documentate, dieci note di prova, script per la prova con un modello vero (da eseguire) |
+| M5-T4 | [Prompt engineering](markdown/M5-ai-generativa/M5-T4_prompt.md) · [`prompt_engineering.md`](prompt_engineering.md) | prompt versionati in file, tre tecniche documentate, dieci note di prova, prova con `llama3.1:8b`: `v1` 5/10, `v2` 8-9/10, tabella prima e dopo |
 | M5-T5 | [Assistente e riepiloghi](markdown/M5-ai-generativa/M5-T5_assistente_e_riepiloghi.md) | contesto dell'alveare, riepilogo validato e salvato in `riepiloghi_ispezione` con modello, prompt, durata e token; guasti e privacy |
 | M5-T6 | [Test dell'AI senza rete](markdown/M5-ai-generativa/M5-T6_test_ai_offline.md) | 15 risposte dei provider (scritte a mano), la catena intera col client vero, rete bloccata nella suite, prova con ambiente ostile |
 
