@@ -285,6 +285,7 @@ class InfoAssistente:
     descrizione: str  # «modello via provider (chiave: …)»
     versione_prompt: str
     attesa_massima_s: int  # tetto di una generazione, tentativo correttivo compreso
+    in_locale: bool | None = None  # True = le note restano sul PC; None = non configurato
 
 
 def _id_positivo(valore: Any, campo: str, *, obbligatorio: bool) -> int | None:
@@ -356,6 +357,7 @@ class Servizi:
         dashboard: DashboardRepository | None = None,
         descrizione_llm: str = "non configurato",
         timeout_llm: int = 60,
+        llm_in_locale: bool | None = None,
     ) -> None:
         self._crea_predittore = crea_predittore
         self._predittore: Predittore | None = None
@@ -374,6 +376,7 @@ class Servizi:
         self._dashboard = dashboard or DashboardRepository(database)
         self.descrizione_llm = descrizione_llm  # «modello via provider (chiave: …)», senza segreti
         self._timeout_llm = timeout_llm
+        self._llm_in_locale = llm_in_locale
 
     # ----------------------------------------------------------------------- #
     # Dipendenze
@@ -1049,6 +1052,7 @@ class Servizi:
             descrizione=self.descrizione_llm,
             versione_prompt=versione_prompt(),
             attesa_massima_s=2 * FATTORE_TETTO_TEMPO * self._timeout_llm,
+            in_locale=self._llm_in_locale,
         )
 
     def riepiloghi_ispezione(
@@ -1276,4 +1280,5 @@ def crea_servizi(configurazione: Config | None = None) -> Servizi:
         crea_llm=lambda: crea_client(cfg.llm),
         descrizione_llm=cfg.llm.descrizione(),
         timeout_llm=cfg.llm.timeout,
+        llm_in_locale=cfg.llm.in_locale,
     )

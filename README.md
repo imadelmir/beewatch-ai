@@ -33,7 +33,7 @@ conversazionale che può girare interamente sul tuo computer.
 |---|---|
 | **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
 | **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza, accesso ai dati (transazioni, repository) ed ETL del dataset USDA |
-| **Risultato finora** | 4 milestone su 8 completate, 1599 test automatici (1446 rapidi + 153 con MySQL in Docker), CI verde |
+| **Risultato finora** | 4 milestone su 8 completate, 1639 test automatici (1486 rapidi + 153 con MySQL in Docker), CI verde |
 | **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
 | **Demo** | Non ancora: lo scheletro dell'interfaccia c'è (`streamlit run app/Home.py`), le pagine sono M6. [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
 | **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
@@ -278,9 +278,10 @@ grandezza, mai come previsione puntuale. Per questo ogni stima è mostrata come
 > **Questo software non è uno strumento diagnostico.** Non sostituisce un
 > veterinario né un tecnico apistico.
 
-L'analisi completa dei limiti — bias dei dati, privacy e GDPR, trasparenza, EU
-AI Act, usi impropri — è in
-[`docs/markdown/M2-dati/dati.md`](docs/markdown/M2-dati/dati.md).
+I cinque punti etici — bias dei dati, privacy e GDPR, trasparenza, EU AI Act,
+limiti e usi impropri — sono in [`docs/etica.md`](docs/etica.md), con le stesse
+parole della pagina **Trasparenza** dell'applicazione. L'analisi dei limiti dei
+dati è in [`docs/markdown/M2-dati/dati.md`](docs/markdown/M2-dati/dati.md).
 
 ## Licenza
 

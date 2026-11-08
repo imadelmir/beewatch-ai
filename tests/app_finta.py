@@ -144,6 +144,7 @@ def servizi_finti(
     crea_predittore=PredittoreStub,
     alveari: AlveariFinti | None = None,
     ispezioni: IspezioniFinte | None = None,
+    llm_in_locale: bool | None = True,
 ) -> Servizi:
     return Servizi(
         None,
@@ -158,6 +159,7 @@ def servizi_finti(
         riepiloghi=RiepiloghiInMemoria(),
         raccolti=RaccoltiVuoti(),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
+        llm_in_locale=llm_in_locale,
     )
 
 

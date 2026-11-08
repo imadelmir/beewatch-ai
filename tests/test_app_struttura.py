@@ -134,6 +134,8 @@ def test_ogni_pagina_parte_con_avvia(pagina):
             return False  # docstring
         if isinstance(nodo, ast.Assign) and "st." not in ast.unparse(nodo.value):
             return isinstance(nodo.value, ast.Call) and "avvia" in ast.unparse(nodo.value)
+        if isinstance(nodo, ast.AnnAssign) and nodo.value is not None:  # costante annotata
+            return isinstance(nodo.value, ast.Call) or "st." in ast.unparse(nodo.value)
         return True
 
     prima = next(n for n in albero(PAGINE / pagina).body if eseguita(n))
