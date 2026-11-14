@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+from preferenze_finte import PreferenzeInMemoria
 
 from beewatch.exceptions import DatabaseError, ModelError, ValidationError
 from beewatch.models import Apiario
@@ -33,7 +34,11 @@ class ApiariFinti:
 
 
 class AlveariFinti:
-    def trascurati(self, utente_id):
+    def __init__(self):
+        self.giorni_chiesti: list[int] = []
+
+    def trascurati(self, utente_id, giorni=30):
+        self.giorni_chiesti.append(giorni)
         return [{"id": 1}]
 
 
@@ -53,7 +58,8 @@ def servizi(**extra) -> Servizi:
         crea_predittore=extra.pop("crea_predittore", PredittoreStub),
         dashboard=extra.pop("dashboard", DashboardFinto()),
         apiari=ApiariFinti(),
-        alveari=AlveariFinti(),
+        alveari=extra.pop("alveari", AlveariFinti()),
+        preferenze=extra.pop("preferenze", PreferenzeInMemoria()),
         **extra,
     )
 
@@ -123,3 +129,15 @@ def test_senza_il_modello_lo_stato_e_un_model_error():
 def test_la_descrizione_del_provider_si_passa_ai_servizi_e_ha_un_valore_di_ripiego():
     assert servizi(descrizione_llm="m via ollama").descrizione_llm == "m via ollama"
     assert servizi().descrizione_llm == "non configurato"
+
+
+def test_da_controllare_usa_i_giorni_scelti_nelle_impostazioni():
+    """M6-T13: la soglia del «Da controllare» è quella dell'utente, 30 se non l'ha scelta."""
+    alveari, preferenze = AlveariFinti(), PreferenzeInMemoria()
+    s = servizi(alveari=alveari, preferenze=preferenze)
+    s.panoramica(1)
+    s.salva_preferenze(1, giorni_promemoria=14, avvisi_rischio=True, assistente_esterno=True)
+
+    s.panoramica(1)
+
+    assert alveari.giorni_chiesti == [30, 14]

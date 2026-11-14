@@ -16,7 +16,9 @@ from types import ModuleType
 
 import pytest
 import streamlit as st
+from accesso_finto import UtentiInMemoria
 from assistente_finto import RaccoltiVuoti, RiepiloghiInMemoria
+from preferenze_finte import PreferenzeInMemoria
 from previsione_finta import ModelliFinti, PrevisioniInMemoria, ProduzioneFinta
 from report_finto import ReportInMemoria
 from streamlit.testing.v1 import AppTest
@@ -78,8 +80,12 @@ class ApiariFinti:
 
 
 class AlveariFinti:
-    def trascurati(self, utente_id: int) -> list[dict]:
-        return [{"id": 3, "codice": "A3"}, {"id": 5, "codice": "B1"}]
+    def trascurati(self, utente_id: int, giorni: int = 30) -> list[dict]:
+        # le colonne di Q3: `ultima` è None per un alveare mai ispezionato
+        return [
+            {"id": 3, "codice": "A3", "ultima": None},
+            {"id": 5, "codice": "B1", "ultima": None},
+        ]
 
     # La pagina Alveari (M6-T3) chiede anche questi: qui nessun alveare da elencare. I test
     # della pagina usano l'anagrafica in memoria di `anagrafica_finta.py`.
@@ -105,6 +111,9 @@ class AlveariConUnaIspezione(AlveariFinti):
 
 class IspezioniFinte:
     """Una sola ispezione, dell'alveare A3 (`AlveariConUnaIspezione`)."""
+
+    def a_rischio_alto(self, utente_id: int, giorni: int = 60) -> list[dict]:
+        return []
 
     def ispezioni_per_alveare(self, utente_id: int, alveare_id: int) -> list[Ispezione]:
         if alveare_id != 3:
@@ -161,6 +170,8 @@ def servizi_finti(
         riepiloghi=RiepiloghiInMemoria(),
         raccolti=RaccoltiVuoti(),
         report=ReportInMemoria(),
+        preferenze=PreferenzeInMemoria(),
+        utenti=UtentiInMemoria(),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
         llm_in_locale=llm_in_locale,
     )

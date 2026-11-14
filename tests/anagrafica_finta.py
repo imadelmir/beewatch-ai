@@ -155,7 +155,7 @@ class AlveariInMemoria:
     def trascurati(self, utente_id: int, giorni: int = 30) -> list[dict]:
         self._prova()
         return [
-            {"id": a.id, "codice": a.codice}
+            {"id": a.id, "codice": a.codice, "ultima": None}
             for a in self.trova_alveari_attivi(utente_id)
             if a.id not in self.ispezioni
         ]
@@ -207,6 +207,21 @@ class IspezioniInMemoria:
         if ispezione and self.alveari._dell_utente(utente_id, ispezione.alveare_id):
             return ispezione
         return None
+
+    def a_rischio_alto(self, utente_id: int, giorni: int = 60) -> list[dict]:
+        """Come Q6: rischio medio o alto (senza la finestra di date: i dati di prova sono fissi)."""
+        self._prova()
+        etichette = {LivelloRischio.MEDIO: "Rischio medio", LivelloRischio.ALTO: "Rischio alto"}
+        scelte = [
+            i for i in self.righe.values()
+            if i.livello_rischio in etichette and self.alveari._dell_utente(utente_id, i.alveare_id)
+        ]  # fmt: skip
+        return [
+            {"id": i.id, "codice": self.alveari.righe[i.alveare_id].codice,
+             "data_ispezione": i.data_ispezione, "rischio": etichette[i.livello_rischio],
+             "note": i.note}
+            for i in sorted(scelte, key=lambda i: (i.data_ispezione, i.id), reverse=True)
+        ]  # fmt: skip
 
     def ispezioni_per_alveare(self, utente_id: int, alveare_id: int) -> list[Ispezione]:
         self._prova()

@@ -44,6 +44,8 @@ from beewatch.services import (
     IspezioneInElenco,
     MetricheModello,
     Panoramica,
+    Preferenze,
+    Promemoria,
     Report,
     RiepilogoSalvato,
     Servizi,
@@ -262,6 +264,27 @@ def report_salvato(utente_id: int, report_id: int) -> Report:
     return servizi().report_salvato(utente_id, report_id)
 
 
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
+def profilo(utente_id: int) -> UtenteAutenticato:
+    """Nome ed email dell'utente (sola lettura, in cache)."""
+    return servizi().profilo(utente_id)
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
+def preferenze(utente_id: int) -> Preferenze:
+    """Le preferenze dell'utente, o i predefiniti (sola lettura, in cache)."""
+    return servizi().preferenze(utente_id)
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
+def promemoria(utente_id: int) -> Promemoria:
+    """Alveari da rivedere e avvisi di rischio, secondo le preferenze (sola lettura, in cache)."""
+    return servizi().promemoria(utente_id)
+
+
 def svuota_letture() -> None:
     """Dimentica tutte le letture in cache: da chiamare subito dopo una scrittura.
 
@@ -390,6 +413,18 @@ def avanza_onboarding() -> None:
 def termina_onboarding() -> None:
     """Fine dei primi passi (anche saltati): il router mostra l'app."""
     st.session_state[CHIAVE_ONBOARDING] = None
+    st.rerun()
+
+
+def aggiorna_nome_in_accesso(nome: str) -> None:
+    """Dopo un cambio di profilo, la sidebar mostra il nome nuovo."""
+    st.session_state[CHIAVE_ACCESSO] = nome
+
+
+def account_eliminato() -> None:
+    """L'account non c'è più: la sessione torna a prima dell'accesso, e l'app si riesegue."""
+    esci()
+    svuota_letture()
     st.rerun()
 
 

@@ -58,6 +58,8 @@ CONTENUTO_HOME = APP / "schermate" / "home.py"  # il codice della Home
 SCHERMATE = [CONTENUTO_HOME, *PAGINE]  # la Home e le sei pagine
 # Le pagine che leggono il database (le altre leggono solo il modello di previsione).
 COL_DATABASE = {p.name for p in PAGINE} - {"3_Previsione.py", "6_Trasparenza.py"}
+# Le pagine che senza apiari dicono «Nessun apiario registrato» (Impostazioni non ne ha bisogno).
+COL_APIARIO = COL_DATABASE - {"8_Impostazioni.py"}
 
 CATALOGO = {
     "intestazione": ["titolo", "descrizione"],
@@ -773,5 +775,5 @@ def test_ogni_pagina_regge_il_database_vuoto(app_pronta, monkeypatch, pagina):
     at = esegui(pagina)
 
     assert not at.exception and not at.error
-    if pagina.name in COL_DATABASE:
+    if pagina.name in COL_APIARIO:
         assert any(t.startswith("Nessun apiario registrato.") for t in valori(at.info))

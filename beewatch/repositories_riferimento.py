@@ -87,6 +87,30 @@ class ReportRepository(_Repository):
             cursore.execute("DELETE FROM report WHERE id = %s", (report_id,))
 
 
+class PreferenzeRepository(_Repository):
+    """M6-T13 · una riga per utente (`sql/schema_05_preferenze.sql`); senza riga, i predefiniti."""
+
+    def leggi(self, utente_id: int) -> Riga | None:
+        righe = self._righe(
+            "SELECT giorni_promemoria, avvisi_rischio, assistente_esterno "
+            "FROM preferenze_utente WHERE utente_id = %s",
+            (utente_id,),
+        )
+        return righe[0] if righe else None
+
+    def salva(self, utente_id: int, giorni: int, avvisi: bool, esterno: bool) -> None:
+        with self._db.transazione() as cursore:
+            cursore.execute(
+                "INSERT INTO preferenze_utente "
+                "(utente_id, giorni_promemoria, avvisi_rischio, assistente_esterno) "
+                "VALUES (%s, %s, %s, %s) AS nuove ON DUPLICATE KEY UPDATE "
+                "giorni_promemoria = nuove.giorni_promemoria, "
+                "avvisi_rischio = nuove.avvisi_rischio, "
+                "assistente_esterno = nuove.assistente_esterno",
+                (utente_id, giorni, avvisi, esterno),
+            )
+
+
 class UtentiRepository(_Repository):
     def crea(self, email: str, nome_completo: str, hash_password: str) -> int:
         """M6-T11 · un utente nuovo; l'email (già in minuscolo) dev'essere libera."""
@@ -98,6 +122,31 @@ class UtentiRepository(_Repository):
                 (email, nome_completo, hash_password),
             )
             return cursore.lastrowid
+
+    def trova(self, utente_id: int) -> Riga | None:
+        """M6-T13 · il profilo e l'hash di un utente."""
+        righe = self._righe(
+            "SELECT id, email, nome_completo, hash_password, attivo FROM utenti WHERE id = %s",
+            (utente_id,),
+        )
+        return righe[0] if righe else None
+
+    def aggiorna_profilo(self, utente_id: int, nome_completo: str, email: str) -> None:
+        """M6-T13 · nome ed email; l'email dev'essere libera (fra gli altri utenti)."""
+        with self._db.transazione() as cursore:
+            occupata = ValidationError("Esiste già un account con questa email.", campo="email")
+            _vieta(cursore, "SELECT 1 FROM utenti WHERE email = %s AND id <> %s",
+                   (email, utente_id), occupata)  # fmt: skip
+            cursore.execute(
+                "UPDATE utenti SET nome_completo = %s, email = %s WHERE id = %s",
+                (nome_completo, email, utente_id),
+            )
+
+    def cambia_password(self, utente_id: int, hash_password: str) -> None:
+        with self._db.transazione() as cursore:
+            cursore.execute(
+                "UPDATE utenti SET hash_password = %s WHERE id = %s", (hash_password, utente_id)
+            )
 
     def trova_per_email(self, email: str) -> Riga | None:
         """M6-T11 · l'utente di un'email, con l'hash per verificare la password."""
