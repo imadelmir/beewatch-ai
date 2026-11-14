@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 
 dependencies = [
-    "streamlit>=1.40",
+    "streamlit>=1.60,<1.68",
     "pandas>=2.2",
     "numpy>=1.26",
     # Bloccato alla serie 1.9: il modello salvato in models/ e' un pickle (vedi requirements.txt).
@@ -20,7 +20,7 @@ dependencies = [
     "mysql-connector-python>=9.0",
     "python-dotenv>=1.0",
     "requests>=2.32",
-    "plotly>=5.24",
+    "plotly>=5.24,<7",
 ]
 
 [project.optional-dependencies]
