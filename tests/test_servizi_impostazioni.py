@@ -11,7 +11,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from accesso_finto import GIRI_TEST, PASSWORD_DEMO, UtentiInMemoria
+from accesso_finto import GIRI_TEST, PASSWORD_DEMO, SessioniInMemoria, UtentiInMemoria
 from anagrafica_finta import anagrafica_di_prova, ispezioni_di_prova
 from dati_finti import RISPOSTA
 from llm_fake import LLMFinto
@@ -36,6 +36,7 @@ def servizi(**argomenti) -> tuple[Servizi, UtentiInMemoria, PreferenzeInMemoria]
     s = Servizi(
         None,
         utenti=utenti,
+        sessioni=SessioniInMemoria(utenti),
         preferenze=preferenze,
         apiari=apiari,
         alveari=alveari,

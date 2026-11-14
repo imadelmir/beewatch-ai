@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterator
 
 import bcrypt
 import pytest
-from accesso_finto import EMAIL_DEMO, GIRI_TEST, PASSWORD_DEMO, UtentiInMemoria
+from accesso_finto import EMAIL_DEMO, GIRI_TEST, PASSWORD_DEMO, SessioniInMemoria, UtentiInMemoria
 
 from beewatch import sicurezza
 from beewatch.database import Database
@@ -27,7 +27,7 @@ def bcrypt_veloce(monkeypatch):
 
 def servizi(utenti: UtentiInMemoria | None = None) -> tuple[Servizi, UtentiInMemoria]:
     utenti = utenti or UtentiInMemoria()
-    return Servizi(None, utenti=utenti), utenti
+    return Servizi(None, utenti=utenti, sessioni=SessioniInMemoria(utenti)), utenti
 
 
 DATI = {"nome": "Mario Rossi", "email": "Mario.Rossi@Esempio.it ", "password": "favo-di-miele"}

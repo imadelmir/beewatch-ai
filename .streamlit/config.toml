@@ -1,36 +1,88 @@
-# Tema e server di Streamlit. La palette è quella del §5 di docs/markdown/M6-interfaccia/ui_spec.md.
-# Streamlit lo legge dalla cartella da cui si lancia `streamlit run`: la radice del progetto (e
-# /app nel contenitore, dove il Dockerfile lo copia).
+# Tema e server di Streamlit: i colori sono quelli del design system del mockup ad alta fedeltà
+# (tavole «Design System», tema chiaro e scuro), riportati nel §5 di
+# docs/markdown/M6-interfaccia/ui_spec.md. Streamlit lo legge dalla cartella da cui si lancia
+# `streamlit run`: la radice del progetto (e /app nel contenitore, dove il Dockerfile lo copia).
 #
-# Niente CSS iniettato: il tema è tutto qui, in modo nativo (ui_spec §2 e §13). È l'unico punto
-# dello stile dell'app (M6-T10): senza questo file l'app funziona uguale, con il tema di default.
+# Qui c'è tutto ciò che il tema nativo sa fare: colori dei due temi, font, raggi. Il resto del
+# mockup (sfondo a nido d'ape, card, sidebar) è in un solo file CSS, app/stile/beewatch.css.
 
 [theme]
-base = "light"
-primaryColor = "#C77D02"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#FAF6F0"
-textColor = "#1A1A1A"
-font = "sans serif"
-# M6-T10 · l'identità del mockup con le sole chiavi native del tema (Streamlit 1.60–1.67)
-borderColor = "#E5DED4"
-showWidgetBorder = true
-baseRadius = "0.75rem"
-buttonRadius = "0.5rem"
-linkColor = "#C77D02"
+font = "Poppins"
 headingFontWeights = [700, 700, 600, 600, 600, 600]
-metricValueFontSize = "1.875rem"
-dataframeHeaderBackgroundColor = "#FAF6F0"
-chartCategoricalColors = ["#C77D02", "#1A1A1A", "#6B6B6B", "#ED9C00", "#2E7D32", "#1565C0"]
+headingFontSizes = ["2.375rem", "1.375rem", "1.125rem", "1rem", "0.9375rem", "0.875rem"]
+baseFontSize = 14
+baseRadius = "10px"
+buttonRadius = "10px"
+showWidgetBorder = true
 showSidebarBorder = true
+metricValueFontSize = "1.75rem"
+# Leggibili su entrambi gli sfondi (in 1.60 non si possono dare per singolo tema)
+chartCategoricalColors = ["#F5B301", "#E8890B", "#2FA96A", "#9B968D", "#E0524A", "#7C7566"]
 
-[theme.sidebar]
-backgroundColor = "#FFF8E7"
-secondaryBackgroundColor = "#FFFFFF"
+[[theme.fontFaces]]
+family = "Poppins"
+url = "app/static/fonts/Poppins-Regular.ttf"
+weight = 400
+
+[[theme.fontFaces]]
+family = "Poppins"
+url = "app/static/fonts/Poppins-Medium.ttf"
+weight = 500
+
+[[theme.fontFaces]]
+family = "Poppins"
+url = "app/static/fonts/Poppins-SemiBold.ttf"
+weight = 600
+
+[[theme.fontFaces]]
+family = "Poppins"
+url = "app/static/fonts/Poppins-Bold.ttf"
+weight = 700
+
+[theme.light]
+primaryColor = "#F5B301"
+backgroundColor = "#FDF9EC"
+secondaryBackgroundColor = "#FBF5E6"
+textColor = "#1E1A12"
+borderColor = "#F2E9D2"
+linkColor = "#B98200"
+dataframeHeaderBackgroundColor = "#FBF5E6"
+greenColor = "#2FA96A"
+orangeColor = "#E8890B"
+redColor = "#E0524A"
+yellowColor = "#F5B301"
+
+[theme.light.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FDF9EC"
+
+[theme.dark]
+primaryColor = "#FFC709"
+backgroundColor = "#0A0A0A"
+secondaryBackgroundColor = "#1C1A16"
+textColor = "#FFFFFF"
+borderColor = "#2A2620"
+linkColor = "#FFC709"
+dataframeHeaderBackgroundColor = "#1C1A16"
+greenColor = "#4ADE80"
+orangeColor = "#FFA726"
+redColor = "#FF6B6B"
+yellowColor = "#FFC709"
+
+[theme.dark.sidebar]
+backgroundColor = "#0F0E0C"
+secondaryBackgroundColor = "#1C1A16"
+
+[client]
+# Come nel mockup: niente bottone Deploy né menu dello sviluppatore. Il tema si sceglie
+# dall'interruttore Scuro/Chiaro dell'app.
+toolbarMode = "minimal"
 
 [server]
 # Evita che il file watcher rilanci l'app durante la demo
 runOnSave = false
+# Serve app/static: i file del font Poppins (licenza OFL, nel repository: nessuna richiesta a Google)
+enableStaticServing = true
 
 [browser]
 gatherUsageStats = false

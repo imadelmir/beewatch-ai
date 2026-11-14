@@ -96,8 +96,13 @@ def leggi_spec() -> str:
 
 
 def sidebar_di(at: AppTest) -> list[str]:
-    """Ciò che la sidebar mostra, nell'ordine: intestazioni e didascalie."""
-    return valori(at.sidebar.header) + valori(at.sidebar.caption)
+    """Ciò che la sidebar mostra, nell'ordine: didascalie, blocco dell'utente, bottoni."""
+    return valori(at.sidebar.caption) + html_di(at.sidebar) + [b.label for b in at.sidebar.button]
+
+
+def html_di(blocco) -> list[str]:
+    """Il codice degli `st.html` di un blocco (AppTest non li conosce per nome)."""
+    return [e.proto.body for e in blocco.get("html")]
 
 
 # =========================================================================== #
@@ -172,28 +177,48 @@ def test_nessun_form_e_duplicato_tra_le_pagine():
 
 
 def test_la_palette_e_identica_al_paragrafo_3_della_specifica(ui):
+    import tema
+
     sezione = leggi_spec().split("## 3. Palette")[1].split("\n## ")[0]
-    righe = dict(re.findall(r"^\| ([^|]+?) \| `(#[0-9A-F]{6})` \|", sezione, flags=re.M))
-    assert righe == {
-        "Primario": ui.PRIMARIO,
-        "Sfondo": "#FFFFFF",
-        "Sfondo secondario": ui.SFONDO_SECONDARIO,
-        "Testo": ui.TESTO,
-        "Testo attenuato": ui.TESTO_ATTENUATO,
-        "Bordo": ui.BORDO,
-        "Positivo / in salute": ui.POSITIVO,
-        "Attenzione": ui.ATTENZIONE,
-        "Critico": ui.CRITICO,
-        "Informazione / AI": ui.INFORMAZIONE,
-        "Neutro": ui.NEUTRO,
-    }
+    righe = re.findall(
+        r"^\| ([^|]+?) \| `(#[0-9A-F]{6})` \| `(#[0-9A-F]{6})` \|", sezione, flags=re.M
+    )
+    token = {
+        "Accent": "accento", "Accent 2": "accento2", "Sfondo": "sfondo",
+        "Superficie": "superficie", "Bordo": "bordo", "Testo": "testo", "Testo 2": "testo2",
+        "Successo": "successo", "Attenzione": "attenzione", "Critico": "critico",
+    }  # fmt: skip
+    assert [r[0] for r in righe] == list(token)
+    for nome, chiaro, scuro in righe:
+        assert tema.PALETTE["light"][token[nome]] == chiaro, nome
+        assert tema.PALETTE["dark"][token[nome]] == scuro, nome
+    # ui.py usa i token del tema chiaro
+    assert (ui.PRIMARIO, ui.TESTO, ui.BORDO) == ("#F5B301", "#1E1A12", "#F2E9D2")
+    assert (ui.POSITIVO, ui.ATTENZIONE, ui.CRITICO) == ("#2FA96A", "#E8890B", "#E0524A")
+
+
+def test_lo_stile_dei_grafici_segue_il_tema(ui, monkeypatch):
+    import tema
+
+    monkeypatch.setattr(tema, "tema_attivo", lambda: "dark")
+    scuro = ui.stile_figura()
+    monkeypatch.setattr(tema, "tema_attivo", lambda: "light")
+    chiaro = ui.stile_figura()
+
+    assert scuro["template"] == "plotly_dark" and chiaro["template"] == "plotly_white"
+    assert scuro["font"]["color"] == "#FFFFFF" and chiaro["font"]["color"] == "#1E1A12"
+    assert chiaro["paper_bgcolor"] == "rgba(0,0,0,0)"  # si vede la card sotto
 
 
 def test_nessun_colore_esadecimale_fuori_dalla_palette_in_app(ui):
+    import tema
+
     ammessi = {
         ui.PRIMARIO, ui.TESTO, ui.TESTO_ATTENUATO, ui.BORDO, ui.SFONDO_SECONDARIO, ui.POSITIVO,
         ui.ATTENZIONE, ui.CRITICO, ui.INFORMAZIONE, ui.NEUTRO, "#FFFFFF",
     }  # fmt: skip
+    # i token dei due temi del mockup (app/tema.py)
+    ammessi |= {v for colori in tema.PALETTE.values() for v in colori.values() if v[0] == "#"}
     for percorso in sorted(APP.rglob("*.py")):
         trovati = set(re.findall(r"#[0-9A-Fa-f]{6}\b", percorso.read_text(encoding="utf-8")))
         assert trovati <= ammessi, (percorso.name, trovati - ammessi)
@@ -335,7 +360,7 @@ def test_la_figura_della_serie_ha_assi_con_unita_e_colori_della_palette(ui):
     assert figura.layout.xaxis.title.text == "Anno"
     assert figura.layout.yaxis.title.text == "Produzione (kg)"
     assert figura.layout.title.text == "Produzione"
-    assert [t.line.color for t in figura.data] == [ui.PRIMARIO, ui.TESTO]
+    assert [t.line.color for t in figura.data] == [ui.PRIMARIO, ui.TESTO_ATTENUATO]
     assert len({t.marker.symbol for t in figura.data}) == 2  # non solo il colore
     assert list(figura.data[0].x) == [2023, 2024]  # ordinata nel tempo
 
@@ -436,7 +461,7 @@ def test_figura_barre_ha_assi_con_unita_categorie_palette_e_motivi(ui):
     assert figura.layout.yaxis.title.text == "Resa (kg)"
     assert figura.layout.xaxis.type == "category"  # «2010», mai «2010,5»
     assert figura.layout.barmode == "group"
-    assert [t.marker.color for t in figura.data] == [ui.PRIMARIO, ui.TESTO]
+    assert [t.marker.color for t in figura.data] == [ui.PRIMARIO, ui.TESTO_ATTENUATO]
     assert len({t.marker.pattern.shape for t in figura.data}) == 2  # non solo il colore
 
 
@@ -613,25 +638,40 @@ def test_stima_senza_banda_si_ferma_prima_di_disegnare(app_pronta):
 # =========================================================================== #
 
 
-def test_la_sidebar_ha_identita_apiario_attivo_e_stato_del_sistema(app_pronta, monkeypatch):
+def test_la_sidebar_ha_apiario_attivo_e_chi_ha_fatto_laccesso(app_pronta, monkeypatch):
     installa(app_pronta, monkeypatch, servizi_finti())
 
     at = esegui(HOME)
 
     assert not at.exception
-    assert valori(at.sidebar.header) == ["🐝 BeeWatch AI"]
     [selettore] = at.sidebar.selectbox
     assert selettore.label == "Apiario attivo"
     assert selettore.options == ["Collina", "Valle"] and selettore.value == 10
-    assert valori(at.sidebar.caption) == [
-        "Versione 0.1.0",
-        "**Modello:** v-stub (RandomForestRegressor)",
-        "**Assistente AI:** llama3.1:8b via ollama (chiave: non richiesta)",
-        "**Database:** connesso",
-        "**Accesso:** Apicoltore Dimostrativo",  # M6-T11
-    ]
-    assert len(at.sidebar.divider) == 2
-    assert [b.label for b in at.sidebar.button] == ["Esci"]
+    [utente] = html_di(at.sidebar)  # mockup: avatar con le iniziali, nome, ruolo
+    assert '<div class="bw-avatar">AD</div>' in utente
+    assert "Apicoltore Dimostrativo" in utente and "Apicoltore</div>" in utente
+    assert [b.label for b in at.sidebar.button] == ["Impostazioni", "Esci"]  # nel menu ⌄
+    # lo stato del sistema non è più nella sidebar (mockup): sta nella Home e nelle Impostazioni
+    assert not [c for c in valori(at.sidebar.caption) if c.startswith("**Modello:**")]
+
+
+def test_le_iniziali_dellavatar(ui):
+    assert ui.iniziali("Mario Rossi") == "MR"
+    assert ui.iniziali("  anna  maria  bianchi ") == "AB"
+    assert ui.iniziali("Ape") == "AP"
+    assert ui.iniziali("") == ui.iniziali(None) == "?"
+
+
+def test_il_nome_nella_sidebar_e_protetto_dallhtml(app_pronta, monkeypatch):
+    installa(app_pronta, monkeypatch, servizi_finti())
+    at = AppTest.from_file(str(HOME), default_timeout=30)
+    at.session_state["accesso"] = "<b>Ape</b> & co"
+    at.session_state["utente_id"] = 1
+
+    at.run()
+
+    [utente] = html_di(at.sidebar)
+    assert "&lt;b&gt;Ape&lt;/b&gt; &amp; co" in utente and "<b>" not in utente
 
 
 def test_la_sidebar_e_identica_su_tutte_le_schermate(app_pronta, monkeypatch):
@@ -665,8 +705,7 @@ def test_senza_apiari_la_sidebar_lo_dice_e_non_mostra_il_selettore(app_pronta, m
     at = esegui(HOME)
 
     assert not at.sidebar.selectbox
-    assert "Apiario attivo: nessuno. Nessun apiario registrato." in valori(at.sidebar.caption)
-    assert "**Database:** connesso" in valori(at.sidebar.caption)
+    assert valori(at.sidebar.caption) == ["Apiario attivo: nessuno. Nessun apiario registrato."]
 
 
 def test_se_il_database_non_risponde_la_sidebar_lo_dice_e_la_pagina_mostra_lerrore(
@@ -682,13 +721,15 @@ def test_se_il_database_non_risponde_la_sidebar_lo_dice_e_la_pagina_mostra_lerro
     at = esegui(HOME)
 
     assert not at.exception
-    assert "**Database:** non raggiungibile" in valori(at.sidebar.caption)
+    assert valori(at.sidebar.caption) == [
+        "Apiario attivo: non disponibile finché il database non risponde."
+    ]
     assert not at.sidebar.selectbox
     [errore] = valori(at.error)
     assert errore.startswith("**Non riesco a raggiungere il database.**")
 
 
-def test_se_il_modello_manca_la_sidebar_lo_dice(app_pronta, monkeypatch):
+def test_se_il_modello_manca_la_sidebar_resta_intera(app_pronta, monkeypatch):
     def manca():
         raise ModelError("Il modello non è stato trovato.")
 
@@ -697,7 +738,7 @@ def test_se_il_modello_manca_la_sidebar_lo_dice(app_pronta, monkeypatch):
     at = esegui(PAGINE[0])
 
     assert not at.exception
-    assert "**Modello:** non disponibile" in valori(at.sidebar.caption)
+    assert at.sidebar.selectbox and [b.label for b in at.sidebar.button] == ["Impostazioni", "Esci"]
 
 
 # =========================================================================== #

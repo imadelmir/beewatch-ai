@@ -325,8 +325,11 @@ class ReportETL:
             "BeeWatch AI · ETL produzione USDA",
             f"File:            {self.file}",
             f"SHA-256:         {self.sha256} "
-            + ("(versione ufficiale, data/README.md)" if self.versione_ufficiale
-               else "(NON e' la versione documentata in data/README.md)"),
+            + (
+                "(versione ufficiale, data/README.md)"
+                if self.versione_ufficiale
+                else "(NON e' la versione documentata in data/README.md)"
+            ),
             f"Righe lette:     {self.lette}",
             f"Righe scartate:  {self.scartate_totali}",
             *(f"  {motivo}: {n}" for motivo, n in self.scartate_per_motivo.items()),

@@ -24,26 +24,30 @@ from __future__ import annotations
 import streamlit as st
 from avvio import accesso_effettuato, avvia, passo_onboarding
 
-avvia("BeeWatch AI", pubblica=True)
+avvia("BeeWatch AI", pubblica=True, router=True)
 
 if not accesso_effettuato():
     pagine = [
-        st.Page("schermate/accedi.py", title="Accedi", icon="🔑", default=True),
-        st.Page("schermate/registrati.py", title="Registrati", icon="✍️"),
+        st.Page("schermate/accedi.py", title="Accedi", icon=":material/login:", default=True),
+        st.Page("schermate/registrati.py", title="Registrati", icon=":material/person_add:"),
     ]
 elif passo_onboarding() is not None:
-    pagine = [st.Page("schermate/onboarding.py", title="Primi passi", icon="🧭", default=True)]
+    pagine = [
+        st.Page(
+            "schermate/onboarding.py", title="Primi passi", icon=":material/flag:", default=True
+        )
+    ]
 else:
     pagine = [
-        st.Page("schermate/home.py", title="Home", icon="🐝", default=True),
-        st.Page("pages/1_Alveari.py", title="Alveari", icon="🏠"),
-        st.Page("pages/2_Ispezioni.py", title="Ispezioni", icon="📋"),
-        st.Page("pages/3_Previsione.py", title="Previsione", icon="📈"),
-        st.Page("pages/4_Assistente_AI.py", title="Assistente AI", icon="🤖"),
-        st.Page("pages/5_Dashboard.py", title="Dashboard", icon="📊"),
-        st.Page("pages/6_Trasparenza.py", title="Trasparenza", icon="🔍"),
-        st.Page("pages/7_Report.py", title="Report", icon="📄"),
-        st.Page("pages/8_Impostazioni.py", title="Impostazioni", icon="⚙️"),
+        st.Page("schermate/home.py", title="Home", icon=":material/home:", default=True),
+        st.Page("pages/1_Alveari.py", title="Alveari", icon=":material/hive:"),
+        st.Page("pages/2_Ispezioni.py", title="Ispezioni", icon=":material/assignment_turned_in:"),
+        st.Page("pages/3_Previsione.py", title="Previsioni", icon=":material/show_chart:"),
+        st.Page("pages/4_Assistente_AI.py", title="AI Assistant", icon=":material/smart_toy:"),
+        st.Page("pages/5_Dashboard.py", title="Dashboard", icon=":material/dashboard:"),
+        st.Page("pages/6_Trasparenza.py", title="Trasparenza", icon=":material/visibility:"),
+        st.Page("pages/7_Report.py", title="Report", icon=":material/description:"),
+        st.Page("pages/8_Impostazioni.py", title="Impostazioni", icon=":material/settings:"),
     ]
 
 st.navigation(pagine).run()

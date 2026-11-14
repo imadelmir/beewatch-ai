@@ -71,3 +71,37 @@ class UtentiInMemoria:
         if self.errore:
             raise self.errore
         return next((dict(r) for r in self.righe.values() if r["email"] == email), None)
+
+
+class SessioniInMemoria:
+    """Le sessioni ricordate, come `SessioniRepository`: per impronta, con la scadenza."""
+
+    def __init__(self, utenti: UtentiInMemoria | None = None) -> None:
+        self.utenti = utenti
+        self.righe: dict[str, dict] = {}
+        self.errore: Exception | None = None
+
+    def apri(self, utente_id: int, impronta: str, scade_il) -> None:
+        if self.errore:
+            raise self.errore
+        self.righe[impronta] = {"utente_id": utente_id, "scade_il": scade_il}
+
+    def utente_della_sessione(self, impronta: str) -> dict | None:
+        if self.errore:
+            raise self.errore
+        from datetime import datetime
+
+        sessione = self.righe.get(impronta)
+        if sessione is None or sessione["scade_il"] <= datetime.now() or self.utenti is None:
+            return None
+        riga = self.utenti.righe.get(sessione["utente_id"])
+        if riga is None or not riga["attivo"]:
+            return None
+        return {"id": riga["id"], "email": riga["email"], "nome_completo": riga["nome_completo"]}
+
+    def chiudi(self, impronta: str) -> None:
+        self.righe.pop(impronta, None)
+
+    def chiudi_tutte(self, utente_id: int) -> None:
+        for impronta in [k for k, v in self.righe.items() if v["utente_id"] == utente_id]:
+            del self.righe[impronta]

@@ -24,12 +24,14 @@ from avvio import (
     apiari,
     avvia,
     modello,
+    password_cambiata,
     preferenze,
     prendi_esito,
     profilo,
     promemoria,
     scrittura_riuscita,
 )
+from tema import interruttore_tema
 from ui import formatta_numero, intestazione, metrica, mostra_errore, sidebar
 
 from beewatch.exceptions import BeeWatchError
@@ -106,7 +108,12 @@ with scheda_profilo:
             except BeeWatchError as errore:
                 mostra_errore(errore)
             else:
+                password_cambiata()  # gli altri browser escono, questo resta dentro
                 scrittura_riuscita("Password cambiata.")
+
+    st.subheader("Aspetto")
+    st.caption("Tema dell'applicazione: la pagina si ricarica e resti dentro.")
+    interruttore_tema()
 
     st.subheader("Cancella l'account")
     st.caption(

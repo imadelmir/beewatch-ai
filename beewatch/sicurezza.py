@@ -10,6 +10,9 @@ il limite si controlla prima, con un messaggio per l'utente, invece di troncare 
 
 from __future__ import annotations
 
+import hashlib
+import secrets
+
 import bcrypt
 
 GIRI = 12  # il costo dell'hash: 2^12 iterazioni, come nel seed
@@ -47,3 +50,24 @@ def verifica(password: str, hash_salvato: str | None) -> bool:
         return bcrypt.checkpw(candidata, (hash_salvato or HASH_FITTIZIO).encode("ascii"))
     except (ValueError, UnicodeEncodeError):
         return False
+
+
+# --------------------------------------------------------------------------- #
+# Sessioni ricordate (cookie «Ricordami»)
+# --------------------------------------------------------------------------- #
+
+BYTE_TOKEN_SESSIONE = 32  # 256 bit casuali: non si indovinano
+
+
+def nuovo_token() -> str:
+    """Un token di sessione casuale, da mettere nel cookie del browser (mai nel database)."""
+    return secrets.token_urlsafe(BYTE_TOKEN_SESSIONE)
+
+
+def impronta_token(token: str) -> str:
+    """L'impronta SHA-256 del token: è questa che si salva nel database.
+
+    Chi leggesse la tabella delle sessioni non potrebbe usarle: dall'impronta non si risale al
+    token. Un hash veloce basta (a differenza delle password) perché il token è casuale e lungo.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

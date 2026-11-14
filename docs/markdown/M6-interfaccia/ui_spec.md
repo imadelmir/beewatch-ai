@@ -35,8 +35,14 @@ Streamlit per il tema, creato in **M6-T1**.
 1. **La UI non pensa.** Le pagine raccolgono input, chiamano `services.py`,
    mostrano il risultato. Nessuna query SQL, nessun `joblib.load`, nessuna
    chiamata all'LLM dentro `app/`.
-2. **Niente CSS iniettato.** `unsafe_allow_html=True` è vietato salvo un caso
-   documentato al §11. Si usa solo ciò che Streamlit offre nativamente.
+2. **Lo stile in due punti, e solo lì.** Il tema nativo (`.streamlit/config.toml`)
+   e un solo file CSS (`app/stile/beewatch.css`), applicato da `app/tema.py`. Il
+   CSS usa solo ciò che Streamlit espone (attributi `data-testid`, classi
+   `st-key-…` dei contenitori con chiave). L'HTML nelle pagine resta vietato:
+   `st.html` solo in `tema.py`, `avvio.py` (il cookie) e `ui.py` (pastiglie,
+   blocco dell'utente), con i dati dell'utente sempre protetti con `html.escape`.
+   Senza il CSS l'app funziona uguale. *(Decisione del 2026-11-14: l'aspetto deve
+   essere quello del mockup ad alta fedeltà; prima era vietato ogni CSS.)*
 3. **Nessun numero senza contesto.** Ogni stima ha la sua incertezza, ogni
    output dell'AI ha il suo banner.
 4. **Ogni schermata ha tre stati**: con dati, senza dati, in errore. Tutti e tre
@@ -46,43 +52,37 @@ Streamlit per il tema, creato in **M6-T1**.
 
 ## 3. Palette
 
-Il tema nasce dal dominio (miele, arnie, campo) ma resta sobrio: il colore
-serve a **veicolare significato**, non a decorare.
+I colori sono quelli delle tavole «Design System» del mockup ad alta fedeltà, in
+due temi: **chiaro** e **scuro**, scelti con l'interruttore «Scuro | Chiaro»
+(pagina Accedi e Impostazioni → Profilo → Aspetto). Stanno in
+`.streamlit/config.toml` (tema nativo) e in `app/tema.py` (`PALETTE`, per il CSS);
+un test controlla che coincidano.
 
-### Colori di base
-
-| Ruolo | Hex | Uso |
-|---|---|---|
-| Primario | `#C77D02` | ambra scura: bottoni, link, slider, elementi attivi |
-| Sfondo | `#FFFFFF` | corpo della pagina |
-| Sfondo secondario | `#FAF6F0` | crema: sidebar, card, `st.metric`, tabelle alternate |
-| Testo | `#1A1A1A` | quasi-nero, contrasto 16:1 su bianco |
-| Testo attenuato | `#6B6B6B` | didascalie, unità di misura, note |
-| Bordo | `#E5DED4` | separatori, contorni delle card |
-
-### Colori semantici
-
-Da usare **solo** con questi significati. Non sono decorativi.
-
-| Significato | Hex | Dove compare |
-|---|---|---|
-| Positivo / in salute | `#2E7D32` | stato alveare OK, delta di produzione in crescita |
-| Attenzione | `#ED9C00` | scorte in calo, confidenza AI bassa, dati incompleti |
-| Critico | `#C62828` | sospetta varroa, errori, alveare perso |
-| Informazione / AI | `#1565C0` | banner "contenuto generato da un'AI", note metodologiche |
-| Neutro | `#6B6B6B` | dato non disponibile, stato sconosciuto |
+| Token | Chiaro | Scuro | Uso |
+|---|---|---|---|
+| Accent | `#F5B301` | `#FFC709` | bottoni primari (con il testo scuro), voce attiva del menu, elementi attivi |
+| Accent 2 | `#FFD256` | `#FFDD55` | secondo giallo: grafici, logo |
+| Sfondo | `#FDF9EC` | `#0A0A0A` | corpo della pagina, con il nido d'ape |
+| Superficie | `#FFFFFF` | `#151412` | card, sidebar, form |
+| Bordo | `#F2E9D2` | `#2A2620` | contorni e separatori |
+| Testo | `#1E1A12` | `#FFFFFF` | testo principale |
+| Testo 2 | `#7C7566` | `#9B968D` | didascalie, etichette, voci del menu |
+| Successo | `#2FA96A` | `#4ADE80` | stato attivo, delta in crescita |
+| Attenzione | `#E8890B` | `#FFA726` | alveari da controllare, rischio medio |
+| Critico | `#E0524A` | `#FF6B6B` | errori, rischio alto, Elimina |
 
 **Regola di accessibilità:** il colore non è mai l'unico veicolo
 dell'informazione. Ogni stato colorato porta anche un'etichetta testuale o
-un'icona. Circa l'8% degli uomini ha una forma di daltonismo, e il docente
-potrebbe essere fra questi.
+un'icona. Sul giallo il testo è sempre scuro (`#1E1A12`): il bianco non si legge.
 
 ---
 
 ## 4. Tipografia e spaziatura
 
-Si usa il font di sistema di Streamlit (`sans serif`). Nessun font esterno:
-sarebbe una richiesta di rete in più che può fallire durante la demo.
+Font **Poppins** (licenza OFL), nel repository in `app/static/fonts` e servito
+dall'app stessa: nessuna richiesta a Google, funziona anche senza rete. Scala del
+mockup: titolo pagina Bold 38, titolo card Bold 18, etichette e bottoni Medium 15,
+corpo Regular 14, didascalie Regular 12.
 
 | Elemento | Come si ottiene | Quando |
 |---|---|---|
@@ -100,35 +100,96 @@ diventano illeggibili su portatile.
 
 ## 5. Tema Streamlit
 
-File `.streamlit/config.toml`, creato in **M6-T1** ed esteso in **M6-T10**:
+File `.streamlit/config.toml`, creato in **M6-T1**, esteso in **M6-T10** e rifatto
+sul mockup (due temi, Poppins) il 2026-11-14. Un test lo confronta con questo
+blocco:
 
 ```toml
-[theme]
-base = "light"
-primaryColor = "#C77D02"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#FAF6F0"
-textColor = "#1A1A1A"
-font = "sans serif"
-# M6-T10 · l'identità del mockup con le sole chiavi native del tema (Streamlit 1.60–1.67)
-borderColor = "#E5DED4"
-showWidgetBorder = true
-baseRadius = "0.75rem"
-buttonRadius = "0.5rem"
-linkColor = "#C77D02"
-headingFontWeights = [700, 700, 600, 600, 600, 600]
-metricValueFontSize = "1.875rem"
-dataframeHeaderBackgroundColor = "#FAF6F0"
-chartCategoricalColors = ["#C77D02", "#1A1A1A", "#6B6B6B", "#ED9C00", "#2E7D32", "#1565C0"]
-showSidebarBorder = true
+# Tema e server di Streamlit: i colori sono quelli del design system del mockup ad alta fedeltà
+# (tavole «Design System», tema chiaro e scuro), riportati nel §5 di
+# docs/markdown/M6-interfaccia/ui_spec.md. Streamlit lo legge dalla cartella da cui si lancia
+# `streamlit run`: la radice del progetto (e /app nel contenitore, dove il Dockerfile lo copia).
+#
+# Qui c'è tutto ciò che il tema nativo sa fare: colori dei due temi, font, raggi. Il resto del
+# mockup (sfondo a nido d'ape, card, sidebar) è in un solo file CSS, app/stile/beewatch.css.
 
-[theme.sidebar]
-backgroundColor = "#FFF8E7"
-secondaryBackgroundColor = "#FFFFFF"
+[theme]
+font = "Poppins"
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+headingFontSizes = ["2.375rem", "1.375rem", "1.125rem", "1rem", "0.9375rem", "0.875rem"]
+baseFontSize = 14
+baseRadius = "10px"
+buttonRadius = "10px"
+showWidgetBorder = true
+showSidebarBorder = true
+metricValueFontSize = "1.75rem"
+# Leggibili su entrambi gli sfondi (in 1.60 non si possono dare per singolo tema)
+chartCategoricalColors = ["#F5B301", "#E8890B", "#2FA96A", "#9B968D", "#E0524A", "#7C7566"]
+
+[[theme.fontFaces]]
+family = "Poppins"
+url = "app/static/fonts/Poppins-Regular.ttf"
+weight = 400
+
+[[theme.fontFaces]]
+family = "Poppins"
+url = "app/static/fonts/Poppins-Medium.ttf"
+weight = 500
+
+[[theme.fontFaces]]
+family = "Poppins"
+url = "app/static/fonts/Poppins-SemiBold.ttf"
+weight = 600
+
+[[theme.fontFaces]]
+family = "Poppins"
+url = "app/static/fonts/Poppins-Bold.ttf"
+weight = 700
+
+[theme.light]
+primaryColor = "#F5B301"
+backgroundColor = "#FDF9EC"
+secondaryBackgroundColor = "#FBF5E6"
+textColor = "#1E1A12"
+borderColor = "#F2E9D2"
+linkColor = "#B98200"
+dataframeHeaderBackgroundColor = "#FBF5E6"
+greenColor = "#2FA96A"
+orangeColor = "#E8890B"
+redColor = "#E0524A"
+yellowColor = "#F5B301"
+
+[theme.light.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FDF9EC"
+
+[theme.dark]
+primaryColor = "#FFC709"
+backgroundColor = "#0A0A0A"
+secondaryBackgroundColor = "#1C1A16"
+textColor = "#FFFFFF"
+borderColor = "#2A2620"
+linkColor = "#FFC709"
+dataframeHeaderBackgroundColor = "#1C1A16"
+greenColor = "#4ADE80"
+orangeColor = "#FFA726"
+redColor = "#FF6B6B"
+yellowColor = "#FFC709"
+
+[theme.dark.sidebar]
+backgroundColor = "#0F0E0C"
+secondaryBackgroundColor = "#1C1A16"
+
+[client]
+# Come nel mockup: niente bottone Deploy né menu dello sviluppatore. Il tema si sceglie
+# dall'interruttore Scuro/Chiaro dell'app.
+toolbarMode = "minimal"
 
 [server]
 # Evita che il file watcher rilanci l'app durante la demo
 runOnSave = false
+# Serve app/static: i file del font Poppins (licenza OFL, nel repository: nessuna richiesta a Google)
+enableStaticServing = true
 
 [browser]
 gatherUsageStats = false
@@ -137,17 +198,19 @@ gatherUsageStats = false
 Il file **va committato**: senza, chi clona il repository vede l'app con il tema
 di default e la demo non corrisponde agli screenshot della documentazione.
 
-**M6-T10 · l'identità del mockup, in modo nativo.** Il mockup ad alta fedeltà
-(`BeeWatch-AI_Mockup-UI_corretto`) ha card arrotondate con bordo leggero, titoli
-in grassetto, una sidebar color miele e valori delle metriche ben leggibili. Tutto
-questo si ottiene con le chiavi native del tema (`borderColor`, `baseRadius`,
-`headingFontWeights`, `metricValueFontSize`, `[theme.sidebar]`…), disponibili da
-Streamlit 1.60: **nessun CSS iniettato**, quindi le regole del §2 e del §13
-restano valide. Restano fuori, per gli stessi motivi del §13, il tema scuro, il
-font Poppins (richiederebbe un file esterno) e lo sfondo a nido d'ape (richiede
-CSS). Le versioni di Streamlit e Plotly sono bloccate sull'intervallo provato
-(`requirements.txt`), e un test controlla che ogni chiave del tema esista nella
-versione installata.
+**Il resto del mockup** (sfondo a nido d'ape, card con l'ombra, sidebar con il
+blocco dell'utente, pastiglie) è in `app/stile/beewatch.css`, con i colori del
+tema attivo passati come variabili `--bw-*` da `app/tema.py`. Il file non deve
+contenere il carattere «<»: Streamlit scarta un blocco di stile che lo contenga
+(c'è un test).
+
+**Come si cambia tema.** Streamlit non ha un comando Python per farlo: il tema
+lo sceglie il browser e lo ricorda (`localStorage`). L'interruttore scrive quella
+scelta e ricarica la pagina; la sessione riprende grazie al cookie «Ricordami»
+(`sql/schema_06_sessioni.sql`), quindi cambiare tema non fa uscire. La barra
+degli strumenti di Streamlit è ridotta (`toolbarMode = "minimal"`, niente Deploy,
+come nel mockup). Le versioni di Streamlit sono bloccate (`<1.68`) e un test
+controlla che il formato della chiave usata dal browser ci sia ancora.
 
 ---
 
@@ -181,38 +244,37 @@ trovare le stesse cose negli stessi posti.
 ## 7. Sidebar
 
 Definita **una sola volta** in `app/ui.py`, richiamata da ogni pagina. Non si
-duplica il codice in sei file.
+duplica il codice in sei file. Larga 258 px, come nel mockup.
 
 Contenuto, dall'alto in basso:
 
-1. **Identità** — `st.logo()` se disponibile, altrimenti `st.title("BeeWatch AI")`
-   e una didascalia con la versione.
-2. **Apiario attivo** — `st.selectbox`. È il contesto globale: la scelta vive in
-   `st.session_state` e tutte le pagine la leggono da lì. Cambiare apiario
-   aggiorna ogni pagina.
-3. `st.divider()`
-4. **Navigazione** — da **M6-T11** la costruisce `app/Home.py` con
-   `st.navigation()`, in base all'accesso: prima solo Accedi e Registrati, dopo
-   la Home e le pagine di `app/pages/`, nell'ordine del numero nel nome file:
+1. **Logo** — `st.logo()` con il marchio del mockup (cinque esagoni e
+   «BeeWatch **AI**»), in due varianti per il tema chiaro e scuro
+   (`app/static/logo_*.svg`, generate da `scripts/genera_logo.py`).
+2. **Navigazione** — la costruisce `app/Home.py` con `st.navigation()`, in base
+   all'accesso: prima solo Accedi e Registrati, dopo la Home e le pagine di
+   `app/pages/`, con le icone a linea del mockup (Material Symbols):
 
    | File | Voce nel menu |
    |---|---|
    | `1_Alveari.py` | Alveari |
    | `2_Ispezioni.py` | Ispezioni |
-   | `3_Previsione.py` | Previsione |
-   | `4_Assistente_AI.py` | Assistente AI |
+   | `3_Previsione.py` | Previsioni |
+   | `4_Assistente_AI.py` | AI Assistant |
    | `5_Dashboard.py` | Dashboard |
    | `6_Trasparenza.py` | Trasparenza |
    | `7_Report.py` | Report (M6-T12, oltre alle sei originali) |
    | `8_Impostazioni.py` | Impostazioni (M6-T13, oltre alle sei originali) |
 
-   In fondo alla sidebar, dopo l'accesso: chi è entrato e il bottone **Esci**.
+   La voce della pagina aperta è evidenziata in giallo.
+3. **Apiario attivo** — `st.selectbox`. È il contesto globale: la scelta vive in
+   `st.session_state` e tutte le pagine la leggono da lì. Cambiare apiario
+   aggiorna ogni pagina. (Il mockup non lo ha, ma senza non si sceglie l'apiario.)
+4. **Chi ha fatto l'accesso** — in fondo: avatar con le iniziali, nome e
+   «Apicoltore», e un menu (⌄) con **Impostazioni** ed **Esci**.
 
-5. `st.divider()`
-6. **Stato del sistema** — tre righe compatte in `st.caption`: versione del
-   modello caricato, provider LLM attivo, esito dell'ultima connessione al
-   database. Serve a te in sviluppo e al docente in sede d'esame: dimostra che
-   il modello è davvero ricaricato e quale provider sta rispondendo.
+Lo **stato del sistema** (modello, assistente, database) non è più qui: è nella
+Home e nelle Impostazioni (schede AI e Modelli, Database).
 
 **Cosa NON mettere in sidebar:** filtri specifici di una singola pagina. Quelli
 stanno nel corpo, altrimenti l'utente non capisce cosa stia filtrando.
@@ -340,12 +402,15 @@ Da usare a **M6-T9**, prima di considerare chiusa la milestone.
 
 | Tentazione | Perché no |
 |---|---|
-| Animazioni e transizioni CSS | richiedono HTML iniettato, si rompono agli aggiornamenti di Streamlit, non sono testabili |
-| Sidebar personalizzata via CSS | Streamlit cambia le classi interne senza preavviso: si rompe silenziosamente |
-| Font esterni da Google Fonts | una richiesta di rete che può fallire proprio durante la demo |
-| Tema scuro come alternativa | raddoppia le combinazioni di colore da verificare, a fronte di zero requisiti |
+| Animazioni e transizioni CSS | non servono a nessuna informazione e rallentano su un portatile |
+| Selettori delle classi interne di Streamlit (`st-emotion-cache-…`) | cambiano a ogni versione: il CSS usa solo `data-testid` e le classi `st-key-…` |
+| Font da Google Fonts | Poppins è nel repository: nessuna richiesta di rete, nessun indirizzo IP a Google |
 | Componenti di terze parti | dipendenze in più da installare e far funzionare su tre PC diversi |
-| Logo o illustrazioni generate | tempo sottratto alla documentazione, che invece è valutata |
+| Funzioni del mockup senza un servizio dietro (accesso con Google, 2FA, backup del database, lingua e unità di misura) | un bottone che non fa nulla inganna l'utente: si mostrano solo le funzioni vere |
+
+*Superato il 2026-11-14:* tema scuro, font Poppins, sfondo a nido d'ape e sidebar
+personalizzata erano esclusi; l'utente ha chiesto l'aspetto del mockup, e ora ci
+sono, nei due punti del §2.
 
 Il criterio: ogni ora spesa sull'interfaccia deve produrre qualcosa che il
 docente **vede** o che riduce il rischio di crash durante la demo. Un'animazione

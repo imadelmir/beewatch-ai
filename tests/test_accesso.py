@@ -7,7 +7,13 @@ Servizi veri con utenti e anagrafica in memoria (bcrypt vero, con pochi giri).
 from __future__ import annotations
 
 import pytest
-from accesso_finto import EMAIL_DEMO, GIRI_TEST, PASSWORD_DEMO, UtentiInMemoria
+from accesso_finto import (
+    EMAIL_DEMO,
+    GIRI_TEST,
+    PASSWORD_DEMO,
+    SessioniInMemoria,
+    UtentiInMemoria,
+)
 from anagrafica_finta import DATABASE_SPENTO, anagrafica_di_prova, ispezioni_di_prova
 from app_finta import APP, DashboardFinto, PredittoreStub, installa, valori
 from preferenze_finte import PreferenzeInMemoria
@@ -28,6 +34,7 @@ def utenti(app_pronta, monkeypatch) -> UtentiInMemoria:
         app_pronta,
         monkeypatch,
         Servizi(None, utenti=utenti, apiari=apiari, alveari=alveari,
+                sessioni=SessioniInMemoria(utenti),
                 dashboard=DashboardFinto(), crea_predittore=PredittoreStub,
                 preferenze=PreferenzeInMemoria(), ispezioni=ispezioni_di_prova(alveari)),
     )  # fmt: skip
@@ -122,7 +129,7 @@ def test_con_la_password_giusta_si_entra_nella_home(utenti):
     assert not at.exception and not at.error
     assert nella_home(at)
     assert at.session_state["utente_id"] == 1
-    assert "**Accesso:** Apicoltore Dimostrativo" in valori(at.sidebar.caption)
+    assert at.session_state["accesso"] == "Apicoltore Dimostrativo"
 
 
 def test_con_la_password_sbagliata_lo_dice_e_resta_fuori(utenti):
@@ -247,7 +254,12 @@ def test_senza_utente_dimostrativo_il_bottone_lo_spiega(app_pronta, monkeypatch)
         app_pronta,
         monkeypatch,
         Servizi(
-            None, utenti=utenti, apiari=apiari, alveari=alveari, preferenze=PreferenzeInMemoria()
+            None,
+            utenti=utenti,
+            apiari=apiari,
+            alveari=alveari,
+            preferenze=PreferenzeInMemoria(),
+            sessioni=SessioniInMemoria(utenti),
         ),
     )
 

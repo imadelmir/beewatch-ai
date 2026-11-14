@@ -30,7 +30,7 @@ import re
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -76,6 +76,7 @@ from beewatch.repositories import (
     RaccoltiRepository,
     Riga,
 )
+from beewatch.repositories_accesso import SessioniRepository
 from beewatch.repositories_riferimento import (
     DashboardRepository,
     ModelliRepository,
@@ -90,6 +91,8 @@ from beewatch.sicurezza import (
     BYTE_MASSIMI_PASSWORD,
     CARATTERI_MINIMI_PASSWORD,
     calcola_hash,
+    impronta_token,
+    nuovo_token,
     problema_password,
     verifica,
 )
@@ -294,6 +297,20 @@ class UtenteAutenticato:
     email: str
 
 
+# «Ricordami»: quanto vale l'accesso in un browser. Senza la spunta il cookie sparisce chiudendo il
+# browser, e comunque dopo un giorno la sessione non vale più.
+GIORNI_SESSIONE_RICORDATA = 30
+ORE_SESSIONE_BREVE = 24
+
+
+@dataclass(frozen=True)
+class SessioneAperta:
+    """Il token per il cookie del browser; `giorni_cookie` None: finché il browser è aperto."""
+
+    token: str
+    giorni_cookie: int | None
+
+
 MESI = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto",
         "settembre", "ottobre", "novembre", "dicembre")  # fmt: skip
 GIORNI_DA_CONTROLLARE = 30  # come la Home: oltre, un alveare va rivisto
@@ -470,6 +487,7 @@ class Servizi:
         utenti: UtentiRepository | None = None,
         report: ReportRepository | None = None,
         preferenze: PreferenzeRepository | None = None,
+        sessioni: SessioniRepository | None = None,
         configurazione: Config | None = None,
         descrizione_llm: str = "non configurato",
         timeout_llm: int = 60,
@@ -493,6 +511,7 @@ class Servizi:
         self._utenti = utenti or UtentiRepository(database)
         self._report = report or ReportRepository(database)
         self._preferenze = preferenze or PreferenzeRepository(database)
+        self._sessioni = sessioni or SessioniRepository(database)
         self._configurazione = configurazione  # per la scheda Database, senza segreti
         self.descrizione_llm = descrizione_llm  # «modello via provider (chiave: …)», senza segreti
         self._timeout_llm = timeout_llm
@@ -602,6 +621,55 @@ class Servizi:
         )
 
     # ----------------------------------------------------------------------- #
+    # Sessioni ricordate dal browser («Ricordami»)
+    # ----------------------------------------------------------------------- #
+
+    def apri_sessione(
+        self, utente_id: int, *, ricorda: bool, adesso: datetime | None = None
+    ) -> SessioneAperta:
+        """Una sessione per questo browser: il token va nel cookie, l'impronta nel database.
+
+        Con `ricorda` vale 30 giorni; senza, il cookie dura finché il browser è aperto e la
+        sessione al massimo un giorno.
+
+        Raises:
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        durata = (
+            timedelta(days=GIORNI_SESSIONE_RICORDATA)
+            if ricorda
+            else timedelta(hours=ORE_SESSIONE_BREVE)
+        )
+        token = nuovo_token()
+        self._sessioni.apri(utente, impronta_token(token), (adesso or datetime.now()) + durata)
+        return SessioneAperta(token, GIORNI_SESSIONE_RICORDATA if ricorda else None)
+
+    def riprendi_sessione(self, token: str | None) -> UtenteAutenticato | None:
+        """L'utente di un cookie ancora valido; None se il token è assente, ignoto o scaduto.
+
+        Raises:
+            DatabaseError: il database non risponde.
+        """
+        if not token or len(token) > 200:
+            return None
+        riga = self._sessioni.utente_della_sessione(impronta_token(token))
+        if riga is None:
+            return None
+        return UtenteAutenticato(
+            id=int(riga["id"]), nome=riga["nome_completo"], email=riga["email"]
+        )
+
+    def chiudi_sessione(self, token: str | None) -> None:
+        """«Esci»: il cookie di questo browser non vale più.
+
+        Raises:
+            DatabaseError: il database non risponde.
+        """
+        if token:
+            self._sessioni.chiudi(impronta_token(token))
+
+    # ----------------------------------------------------------------------- #
     # Impostazioni (M6-T13)
     # ----------------------------------------------------------------------- #
 
@@ -652,6 +720,7 @@ class Servizi:
         if nuova != conferma:
             raise ValidationError("Le due password nuove non coincidono.", campo="conferma")
         self._utenti.cambia_password(utente, calcola_hash(nuova))
+        self._sessioni.chiudi_tutte(utente)  # gli altri browser devono rifare l'accesso
         logger.info("Password dell'utente %s cambiata", utente)
 
     def elimina_account(self, utente_id: int, *, password: str) -> None:

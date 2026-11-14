@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from accesso_finto import GIRI_TEST, PASSWORD_DEMO, UtentiInMemoria
+from accesso_finto import GIRI_TEST, PASSWORD_DEMO, SessioniInMemoria, UtentiInMemoria
 from anagrafica_finta import DATABASE_SPENTO, anagrafica_di_prova, ispezioni_di_prova
 from app_finta import APP, DashboardFinto, PredittoreStub, con_accesso, installa, valori
 from assistente_finto import RaccoltiVuoti, RiepiloghiInMemoria
@@ -42,6 +42,7 @@ def prepara(app_pronta, monkeypatch, *, llm_in_locale=True, cfg=None) -> Ambient
         monkeypatch,
         Servizi(None, apiari=apiari, alveari=alveari, ispezioni=ispezioni_di_prova(alveari),
                 utenti=utenti, preferenze=preferenze, dashboard=DashboardFinto(),
+                sessioni=SessioniInMemoria(utenti),
                 crea_predittore=PredittoreStub, raccolti=RaccoltiVuoti(),
                 riepiloghi=RiepiloghiInMemoria(), llm_in_locale=llm_in_locale,
                 descrizione_llm="un-modello via openrouter (chiave: impostata)"
@@ -87,7 +88,7 @@ def test_aggiornare_il_profilo_cambia_anche_il_nome_nella_sidebar(ambiente):
 
     assert valori(at.success) == ["Profilo aggiornato."]
     assert ambiente.utenti.righe[1]["nome_completo"] == "Ape Regina"
-    assert "**Accesso:** Ape Regina" in valori(at.sidebar.caption)
+    assert any("Ape Regina" in e.proto.body for e in at.sidebar.get("html"))
 
 
 def test_unemail_gia_usata_lo_dice(ambiente):

@@ -906,7 +906,7 @@ def test_integrazione_il_db_di_test_ha_schema_e_seed_del_principale_in_utf8mb4(
         )
 
     assert tabelle(NOME_DB_TEST) == tabelle(DB_NAME)
-    assert len(tabelle(NOME_DB_TEST).split()) == 17  # + `preferenze_utente` (M6-T13, schema_05)
+    assert len(tabelle(NOME_DB_TEST).split()) == 18  # + `sessioni` («Ricordami», schema_06)
 
     codifica = _come_root(
         stack_mysql,
