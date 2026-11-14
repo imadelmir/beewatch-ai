@@ -10,11 +10,16 @@ from __future__ import annotations
 
 import streamlit as st
 from avvio import avvia, entra
+from tema import interruttore_tema
 from ui import intestazione, mostra_errore
 
 from beewatch.exceptions import BeeWatchError
 
 servizi = avvia("Accedi", "🔑", pubblica=True)
+
+_, angolo = st.columns([5, 1])
+with angolo:
+    interruttore_tema()
 
 intestazione(
     "🐝 BeeWatch AI",
@@ -37,6 +42,11 @@ with modulo:
     with st.form("accedi"):
         email = st.text_input("Email", key="accedi_email", placeholder="nome@dominio.it")
         password = st.text_input("Password", type="password", key="accedi_password")
+        ricorda = st.checkbox(
+            "Ricordami",
+            key="accedi_ricorda",
+            help="Resti dentro per 30 giorni su questo browser. Senza la spunta, finché lo chiudi.",
+        )
         premuto = st.form_submit_button(
             "Accedi", type="primary", key="accedi_invia", width="stretch"
         )
@@ -46,7 +56,7 @@ with modulo:
         except BeeWatchError as errore:
             mostra_errore(errore)
         else:
-            entra(utente)
+            entra(utente, ricorda=ricorda)
 
     st.page_link("schermate/registrati.py", label="Non hai un account? **Registrati**", icon="✍️")
 

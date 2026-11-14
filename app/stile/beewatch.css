@@ -1,0 +1,247 @@
+/*
+ * BeeWatch AI - lo stile del mockup ad alta fedeltà, oltre a quello che il tema nativo sa fare.
+ *
+ * I colori non sono scritti qui: arrivano come variabili `--bw-*` da `app/tema.py`, una serie per
+ * il tema chiaro e una per lo scuro (design system del mockup). I selettori usano solo ciò che
+ * Streamlit espone: gli attributi `data-testid` e le classi `st-key-` seguite dalla chiave dei contenitori con
+ * una chiave. Senza questo file l'app funziona uguale, con il solo tema nativo.
+ */
+
+/* ---------------------------------------------------------------- sfondo a nido d'ape */
+
+.stApp {
+  background-color: var(--bw-sfondo);
+  background-image: var(--bw-alone), var(--bw-favo);
+  background-size: 100% 100%, 112px 194px;
+  background-attachment: fixed, fixed;
+}
+
+header[data-testid="stHeader"] {
+  background: transparent;
+}
+
+[data-testid="stMainBlockContainer"] {
+  padding-top: 2.25rem;
+  padding-left: 2.5rem;
+  padding-right: 2.5rem;
+  max-width: 1440px;
+}
+
+/* ---------------------------------------------------------------- tipografia */
+
+h1 {
+  letter-spacing: -0.02em;
+}
+
+[data-testid="stCaptionContainer"],
+[data-testid="stMarkdownContainer"] .bw-sottotitolo {
+  color: var(--bw-testo2);
+}
+
+/* ---------------------------------------------------------------- sidebar */
+
+section[data-testid="stSidebar"] {
+  width: 258px !important;
+  min-width: 258px !important;
+}
+
+[data-testid="stSidebarNavLink"] {
+  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  margin: 1px 0;
+}
+
+[data-testid="stSidebarNavLink"] span {
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--bw-testo2);
+}
+
+[data-testid="stSidebarNavLink"]:hover {
+  background: var(--bw-accento-tenue);
+}
+
+[data-testid="stSidebarNavLink"][aria-current="page"] {
+  background: var(--bw-voce-attiva);
+}
+
+[data-testid="stSidebarNavLink"][aria-current="page"] span {
+  color: var(--bw-voce-attiva-testo);
+  font-weight: 600;
+}
+
+[data-testid="stSidebarNavLink"][aria-current="page"] [data-testid="stIconMaterial"] {
+  color: var(--bw-voce-attiva-testo);
+}
+
+[data-testid="stSidebarNavSeparator"] {
+  display: none;
+}
+
+/* il blocco dell'utente, in fondo alla sidebar */
+.st-key-bw_utente {
+  border-top: 1px solid var(--bw-bordo);
+  padding-top: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.bw-utente {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.bw-avatar {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--bw-accento-testo);
+  background: var(--bw-accento-tenue);
+  border: 2px solid var(--bw-accento);
+}
+
+.bw-utente-nome {
+  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  color: var(--bw-testo);
+}
+
+.st-key-bw_utente [data-testid="stPopoverButton"] {
+  border: none;
+  background: transparent;
+}
+
+/* la freccia: basta quella dell'icona */
+.st-key-bw_utente [data-testid="stPopoverButton"] div[aria-hidden="true"] {
+  display: none;
+}
+
+.bw-utente-ruolo {
+  font-size: 0.75rem;
+  color: var(--bw-testo2);
+}
+
+/* ---------------------------------------------------------------- card */
+
+[data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"]),
+[data-testid="stMetric"],
+[data-testid="stForm"],
+[data-testid="stExpander"] details {
+  background: var(--bw-superficie);
+  border-color: var(--bw-bordo) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--bw-ombra);
+}
+
+[data-testid="stForm"] {
+  padding: 1.4rem 1.5rem;
+}
+
+[data-testid="stMetric"] {
+  padding: 1rem 1.25rem !important;
+}
+
+[data-testid="stMetricLabel"] p {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--bw-testo2);
+}
+
+[data-testid="stMetricValue"] {
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------- bottoni */
+
+/* Primario: giallo miele con il testo scuro, come nel mockup (il bianco sul giallo non si legge) */
+[data-testid="stBaseButton-primary"],
+[data-testid="stBaseButton-primaryFormSubmit"] {
+  color: #1E1A12 !important;
+  font-weight: 600;
+  border: none;
+  box-shadow: 0 6px 16px -8px var(--bw-accento);
+}
+
+[data-testid="stBaseButton-primary"] p,
+[data-testid="stBaseButton-primaryFormSubmit"] p {
+  font-weight: 600;
+}
+
+[data-testid="stBaseButton-secondary"],
+[data-testid="stBaseButton-secondaryFormSubmit"] {
+  background: var(--bw-superficie);
+  border-color: var(--bw-bordo);
+}
+
+/* ---------------------------------------------------------------- schede (st.tabs) */
+
+[data-baseweb="tab-list"] {
+  gap: 1.25rem;
+}
+
+[data-baseweb="tab"] p {
+  font-weight: 500;
+}
+
+/* ---------------------------------------------------------------- pastiglie di stato */
+
+.bw-badge {
+  display: inline-block;
+  padding: 0.15rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.bw-badge.sano {
+  color: var(--bw-accento-testo);
+  background: var(--bw-accento-tenue);
+}
+
+.bw-badge.attenzione {
+  color: var(--bw-attenzione);
+  background: var(--bw-attenzione-tenue);
+}
+
+.bw-badge.critico {
+  color: var(--bw-critico);
+  background: var(--bw-critico-tenue);
+}
+
+.bw-badge.attivo {
+  color: var(--bw-successo);
+  background: var(--bw-successo-tenue);
+}
+
+.bw-badge.neutro {
+  color: var(--bw-testo2);
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------- interruttore del tema */
+
+.st-key-bw_tema [data-testid="stButtonGroup"] {
+  background: var(--bw-superficie);
+  border: 1px solid var(--bw-bordo);
+  border-radius: 999px;
+  padding: 3px;
+  width: fit-content;
+}
+
+.st-key-bw_tema button {
+  border: none !important;
+  border-radius: 999px !important;
+}
+
+.st-key-bw_tema button[aria-checked="true"] {
+  background: var(--bw-accento) !important;
+  color: #1E1A12 !important;
+}

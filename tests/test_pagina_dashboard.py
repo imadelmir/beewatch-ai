@@ -29,7 +29,7 @@ from beewatch.models import Alveare, Apiario, Raccolto, StatoAlveare, TipoMiele
 from beewatch.services import Servizi
 
 PAGINA = APP / "pages" / "5_Dashboard.py"
-PRIMARIO = "#C77D02"
+PRIMARIO = "#F5B301"  # l'Accent del mockup (specifica §3)
 
 
 def prepara(app_pronta, monkeypatch, *, apiari=None, alveari=None, raccolti=None,

@@ -41,6 +41,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import tema
 
 from beewatch.exceptions import (
     BeeWatchError,
@@ -58,32 +59,40 @@ from beewatch.services import ApiarioScelta
 logger = ottieni_logger("beewatch.app.ui")
 
 # --------------------------------------------------------------------------- #
-# Palette (specifica §3): i colori stanno qui, con un nome, e da nessun'altra parte
+# Palette (specifica §3): i token del mockup, tema chiaro. I colori stanno qui e in `tema.PALETTE`
+# (che ha anche lo scuro), da nessun'altra parte.
 # --------------------------------------------------------------------------- #
 
-PRIMARIO = "#C77D02"
-TESTO = "#1A1A1A"
-TESTO_ATTENUATO = "#6B6B6B"
-BORDO = "#E5DED4"
-SFONDO_SECONDARIO = "#FAF6F0"
+PRIMARIO = tema.PALETTE["light"]["accento"]
+TESTO = tema.PALETTE["light"]["testo"]
+TESTO_ATTENUATO = tema.PALETTE["light"]["testo2"]
+BORDO = tema.PALETTE["light"]["bordo"]
+SFONDO_SECONDARIO = tema.PALETTE["light"]["sfondo"]
 
-POSITIVO = "#2E7D32"
-ATTENZIONE = "#ED9C00"
-CRITICO = "#C62828"
-INFORMAZIONE = "#1565C0"
-NEUTRO = "#6B6B6B"
+POSITIVO = tema.PALETTE["light"]["successo"]
+ATTENZIONE = tema.PALETTE["light"]["attenzione"]
+CRITICO = tema.PALETTE["light"]["critico"]
+INFORMAZIONE = "#1565C0"  # il riquadro blu del contenuto generato dall'AI (mockup, AI Assistant)
+NEUTRO = TESTO_ATTENUATO
 
-# Più serie nello stesso grafico: prima l'ambra, poi i colori di base. I semantici restano ai loro
-# significati (§3); oltre tre serie i colori si ripetono, ma ogni serie ha anche un simbolo suo.
-COLORI_SERIE = (PRIMARIO, TESTO, TESTO_ATTENUATO)
+# Più serie nello stesso grafico: il giallo, poi due colori che si leggono su entrambi gli sfondi.
+# Oltre tre serie i colori si ripetono, ma ogni serie ha anche un simbolo suo.
+COLORI_SERIE = (PRIMARIO, TESTO_ATTENUATO, ATTENZIONE)
 
-# Lo stile comune dei grafici: sfondo bianco, testo della palette.
-_STILE_FIGURA: dict[str, Any] = {
-    "template": "plotly_white",
-    "font": {"color": TESTO},
-    "title_font": {"color": TESTO},
-    "margin": {"l": 10, "r": 10, "t": 50, "b": 10},
-}
+
+def stile_figura() -> dict[str, Any]:
+    """Lo stile comune dei grafici, per il tema attivo: sfondo trasparente (si vede la card),
+    testo e griglia della palette."""
+    colori = tema.PALETTE[tema.tema_attivo()]
+    return {
+        "template": "plotly_dark" if tema.tema_attivo() == "dark" else "plotly_white",
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+        "font": {"color": colori["testo"], "family": "Poppins, sans-serif"},
+        "title_font": {"color": colori["testo"]},
+        "margin": {"l": 10, "r": 10, "t": 50, "b": 10},
+    }
+
 
 DATO_MANCANTE = "—"
 
@@ -116,14 +125,14 @@ AZIONE_NESSUN_APIARIO = "Vai su **Alveari** per aggiungerne uno: da lì comincia
 # Stati dell'alveare: colore, icona e testo (il colore non basta mai da solo)
 # --------------------------------------------------------------------------- #
 
-# (etichetta, icona, sfondo, colore del testo). Il testo è scelto per il contrasto: bianco sui
-# colori scuri, quasi-nero sull'arancio dell'attenzione (il bianco lì non si legge).
+# (etichetta, icona, sfondo, colore del testo). Il testo è scelto per il contrasto (WCAG AA): sui
+# colori del mockup, chiari e accesi, si legge il quasi-nero; il bianco solo sul grigio.
 STILI_STATO: dict[StatoAlveare, tuple[str, str, str, str]] = {
-    StatoAlveare.IN_SALUTE: ("In salute", "✔", POSITIVO, "#FFFFFF"),
+    StatoAlveare.IN_SALUTE: ("In salute", "✔", POSITIVO, TESTO),
     StatoAlveare.IN_OSSERVAZIONE: ("In osservazione", "👁", ATTENZIONE, TESTO),
     StatoAlveare.DEBOLE: ("Debole", "▼", ATTENZIONE, TESTO),
     StatoAlveare.SCIAMATO: ("Sciamato", "↗", ATTENZIONE, TESTO),
-    StatoAlveare.MORTO: ("Morto", "✖", CRITICO, "#FFFFFF"),
+    StatoAlveare.MORTO: ("Morto", "✖", CRITICO, TESTO),
 }
 STILE_SCONOSCIUTO = ("Stato sconosciuto", "?", NEUTRO, "#FFFFFF")
 
@@ -234,33 +243,53 @@ def intestazione(titolo: str, descrizione: str) -> None:
 
 
 def sidebar() -> ApiarioScelta | None:
-    """Disegna la sidebar del §7 e restituisce l'apiario attivo (None se non ce n'è).
+    """Disegna la sidebar del mockup e restituisce l'apiario attivo (None se non ce n'è).
 
-    Dall'alto: identità, selettore dell'apiario attivo, stato del sistema. Il menu delle pagine
-    lo genera Streamlit dalla cartella `pages/` e lo mette sempre in cima alla sidebar.
+    Dall'alto: il logo (sopra il menu, con `st.logo`), il menu delle pagine (lo genera il router),
+    il selettore dell'apiario attivo e, in fondo, chi ha fatto l'accesso con il suo menu
+    (Impostazioni, Esci). Lo stato del sistema non sta qui: è nella Home e nelle Impostazioni.
 
-    Non solleva: se il database o il modello non rispondono, lo dice nello stato del sistema e
-    lascia alla pagina il compito di mostrare l'errore nel corpo.
+    Non solleva: se il database non risponde, il selettore lo dice e la pagina mostra l'errore
+    nel corpo.
     """
+    variante = "scuro" if tema.tema_attivo() == "dark" else "chiaro"
+    st.logo(
+        f"app/static/logo_{variante}.svg",
+        icon_image=f"app/static/icona_{variante}.svg",
+        size="large",
+    )
     with st.sidebar:
-        # `st.header` e non `st.title`: il titolo di livello 1 è uno per pagina (§4).
-        st.header("🐝 BeeWatch AI")
-        st.caption(f"Versione {VERSIONE}")
-
-        attivo, database_raggiunto = _selettore_apiario()
-
-        st.divider()
-        st.caption(f"**Modello:** {_stato_modello()}")
-        st.caption(f"**Assistente AI:** {avvio.servizi().descrizione_llm}")
-        st.caption(
-            "**Database:** connesso" if database_raggiunto else "**Database:** non raggiungibile"
-        )
-
-        # M6-T11: chi c'è, e come si esce. Le pagine con la sidebar si vedono solo dopo l'accesso.
-        st.divider()
-        st.caption(f"**Accesso:** {avvio.nome_in_accesso()}")
-        st.button("Esci", key="esci", on_click=avvio.esci, icon="🚪")
+        attivo, _ = _selettore_apiario()
+        _blocco_utente()
     return attivo
+
+
+def iniziali(nome: str | None) -> str:
+    """Le iniziali dell'avatar: «Mario Rossi» → «MR»; una parola sola → le prime due lettere."""
+    parole = (nome or "").split()
+    if not parole:
+        return "?"
+    if len(parole) == 1:
+        return parole[0][:2].upper()
+    return (parole[0][0] + parole[-1][0]).upper()
+
+
+def _blocco_utente() -> None:
+    nome = avvio.nome_in_accesso() or ""
+    with st.container(key="bw_utente"):
+        persona, menu = st.columns([5, 1], vertical_alignment="center")
+        persona.html(
+            '<div class="bw-utente">'
+            f'<div class="bw-avatar">{html.escape(iniziali(nome))}</div>'
+            f'<div><div class="bw-utente-nome">{html.escape(nome)}</div>'
+            '<div class="bw-utente-ruolo">Apicoltore</div></div></div>'
+        )
+        with menu.popover("", icon=":material/expand_more:", help="Il tuo account"):
+            # Un bottone e non `st.page_link`: il link richiede il router, il bottone no (le pagine
+            # girano anche da sole, nei test).
+            if st.button("Impostazioni", key="vai_impostazioni", icon=":material/settings:"):
+                st.switch_page("pages/8_Impostazioni.py")
+            st.button("Esci", key="esci", on_click=avvio.esci, icon=":material/logout:")
 
 
 def _selettore_apiario() -> tuple[ApiarioScelta | None, bool]:
@@ -459,7 +488,7 @@ def figura_serie(
         xaxis_title=etichetta_x,
         yaxis_title=etichetta_y,
         legend_title_text="",
-        **_STILE_FIGURA,
+        **stile_figura(),
     )
     return figura
 
@@ -526,7 +555,7 @@ def figura_barre(
         xaxis_title=etichetta_x,
         yaxis_title=etichetta_y,
         legend_title_text="",
-        **_STILE_FIGURA,
+        **stile_figura(),
     )
     return figura
 
@@ -605,7 +634,7 @@ def figura_stima(valore: Any, minimo: Any, massimo: Any, unita: str, etichetta: 
                 "symmetric": False,
                 "array": [alto - centro],
                 "arrayminus": [centro - basso],
-                "color": TESTO,
+                "color": tema.PALETTE[tema.tema_attivo()]["testo"],
                 "thickness": 2,
                 "width": 12,
             },
@@ -617,7 +646,7 @@ def figura_stima(valore: Any, minimo: Any, massimo: Any, unita: str, etichetta: 
         xaxis_rangemode="tozero",
         height=180,
         showlegend=False,
-        **_STILE_FIGURA,
+        **stile_figura(),
     )
     return figura
 

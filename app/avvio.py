@@ -32,6 +32,7 @@ from typing import Any, TypeVar
 
 import pandas as pd
 import streamlit as st
+import tema
 
 from beewatch.exceptions import BeeWatchError, DatabaseError
 from beewatch.logging_config import configura, ottieni_logger
@@ -80,6 +81,13 @@ CHIAVE_ESITO = "esito_operazione"
 # e il passo dell'onboarding guidato dopo la registrazione (None = finito o saltato).
 CHIAVE_ACCESSO = "accesso"
 CHIAVE_ONBOARDING = "onboarding"
+# «Ricordami»: il token della sessione di questo browser (resta sul server, nella sessione), se la
+# ripresa dal cookie è già stata tentata, e il cookie da scrivere o cancellare al prossimo giro.
+CHIAVE_SESSIONE = "sessione_browser"
+CHIAVE_RIPRESA = "ripresa_tentata"
+CHIAVE_RICORDA = "ricorda_accesso"
+CHIAVE_COOKIE = "cookie_in_attesa"
+NOME_COOKIE = "bw_sessione"
 PASSI_ONBOARDING = 3  # primo apiario, primo alveare, tutto pronto
 
 
@@ -307,13 +315,19 @@ def inizializza_stato() -> None:
       sa quali apiari esistono (lo imposta `scegli_apiario_iniziale`);
     - `esito_operazione`: il messaggio dell'ultima scrittura riuscita, finché non si mostra;
     - `accesso`: il nome di chi ha fatto l'accesso, o None (M6-T11);
-    - `onboarding`: il passo dei primi passi guidati dopo la registrazione, o None.
+    - `onboarding`: il passo dei primi passi guidati dopo la registrazione, o None;
+    - `sessione_browser`, `ripresa_tentata`, `ricorda_accesso`, `cookie_in_attesa`: il cookie
+      dell'accesso (vedi `riprendi_accesso`).
     """
     st.session_state.setdefault(CHIAVE_UTENTE, None)  # nessuno, finché non c'è l'accesso
     st.session_state.setdefault(CHIAVE_APIARIO_ATTIVO, None)
     st.session_state.setdefault(CHIAVE_ESITO, None)
     st.session_state.setdefault(CHIAVE_ACCESSO, None)
     st.session_state.setdefault(CHIAVE_ONBOARDING, None)
+    st.session_state.setdefault(CHIAVE_SESSIONE, None)  # token del cookie «Ricordami»
+    st.session_state.setdefault(CHIAVE_RIPRESA, False)
+    st.session_state.setdefault(CHIAVE_RICORDA, False)
+    st.session_state.setdefault(CHIAVE_COOKIE, None)
 
 
 def scegli_apiario_iniziale(apiari: tuple[ApiarioScelta, ...]) -> None:
@@ -389,18 +403,27 @@ def passo_onboarding() -> int | None:
     return st.session_state[CHIAVE_ONBOARDING]
 
 
-def entra(utente: UtenteAutenticato, *, nuovo: bool = False) -> None:
+def entra(utente: UtenteAutenticato, *, nuovo: bool = False, ricorda: bool = False) -> None:
     """L'accesso è riuscito: da qui le pagine sono sue. Un utente nuovo parte dall'onboarding.
+
+    Apre anche la sessione del browser: il cookie fa sì che ricaricare la pagina (o cambiare tema)
+    non faccia uscire; con `ricorda` vale 30 giorni. Se il database non la salva, l'accesso vale lo
+    stesso, solo per questa scheda.
 
     Riesegue l'app, così il router (`Home.py`) ricostruisce il menu: va chiamata per ultima.
     """
+    _apri_sessione_browser(utente.id, ricorda)
+    _imposta_accesso(utente, nuovo=nuovo)
+    logger.info("Accesso nella sessione dell'utente %s", utente.id)
+    st.rerun()
+
+
+def _imposta_accesso(utente: UtenteAutenticato, *, nuovo: bool = False) -> None:
     st.session_state[CHIAVE_UTENTE] = utente.id
     st.session_state[CHIAVE_ACCESSO] = utente.nome
     st.session_state[CHIAVE_APIARIO_ATTIVO] = None  # quello dell'utente di prima non è suo
     st.session_state[CHIAVE_ONBOARDING] = 1 if nuovo else None
     st.session_state[CHIAVE_ESITO] = None
-    logger.info("Accesso nella sessione dell'utente %s", utente.id)
-    st.rerun()
 
 
 def avanza_onboarding() -> None:
@@ -421,6 +444,11 @@ def aggiorna_nome_in_accesso(nome: str) -> None:
     st.session_state[CHIAVE_ACCESSO] = nome
 
 
+def password_cambiata() -> None:
+    """Il servizio ha chiuso tutte le sessioni dell'utente: questo browser ne riceve una nuova."""
+    _apri_sessione_browser(st.session_state[CHIAVE_UTENTE], st.session_state[CHIAVE_RICORDA])
+
+
 def account_eliminato() -> None:
     """L'account non c'è più: la sessione torna a prima dell'accesso, e l'app si riesegue."""
     esci()
@@ -431,8 +459,17 @@ def account_eliminato() -> None:
 def esci() -> None:
     """Callback del bottone «Esci»: la sessione torna a prima dell'accesso.
 
-    È un callback (`on_click`): Streamlit riesegue l'app da sé, e il router mostra Accedi.
+    È un callback (`on_click`): Streamlit riesegue l'app da sé, e il router mostra Accedi. Il
+    cookie del browser si cancella e la sua sessione nel database non vale più.
     """
+    token = st.session_state[CHIAVE_SESSIONE]
+    if token:
+        try:
+            servizi().chiudi_sessione(token)
+        except BeeWatchError as errore:  # il cookie si cancella comunque
+            logger.warning("Sessione del browser non chiusa: %s", errore)
+    st.session_state[CHIAVE_SESSIONE] = None
+    st.session_state[CHIAVE_COOKIE] = ("", 0)
     st.session_state[CHIAVE_UTENTE] = None
     st.session_state[CHIAVE_ACCESSO] = None
     st.session_state[CHIAVE_APIARIO_ATTIVO] = None
@@ -441,11 +478,83 @@ def esci() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# «Ricordami»: il cookie della sessione del browser
+# --------------------------------------------------------------------------- #
+
+
+def _apri_sessione_browser(utente_id: int, ricorda: bool) -> None:
+    try:
+        sessione = servizi().apri_sessione(utente_id, ricorda=ricorda)
+    except BeeWatchError as errore:
+        logger.warning("Sessione del browser non salvata: %s", errore)
+        return
+    st.session_state[CHIAVE_SESSIONE] = sessione.token
+    st.session_state[CHIAVE_RICORDA] = ricorda
+    st.session_state[CHIAVE_COOKIE] = (sessione.token, sessione.giorni_cookie)
+
+
+def _cookie_sessione() -> str | None:
+    """Il token del cookie «Ricordami», se il browser l'ha mandato (fuori dal browser: nessuno)."""
+    try:
+        token = st.context.cookies.get(NOME_COOKIE)
+    except Exception:  # pragma: no cover - senza una richiesta del browser
+        return None
+    return token if isinstance(token, str) else None
+
+
+def riprendi_accesso() -> None:
+    """All'apertura (una volta per sessione): se il browser ha un cookie valido, l'accesso c'è già.
+
+    Una volta sola perché i cookie che Streamlit legge sono quelli dell'apertura della pagina:
+    dopo «Esci» il cookie vecchio risulterebbe ancora lì. Se il database non risponde si va
+    avanti senza: la pagina Accedi lo dirà.
+    """
+    if st.session_state[CHIAVE_RIPRESA] or accesso_effettuato():
+        return
+    st.session_state[CHIAVE_RIPRESA] = True
+    token = _cookie_sessione()
+    if not token:
+        return
+    try:
+        utente = servizi().riprendi_sessione(token)
+    except BeeWatchError as errore:
+        logger.warning("Sessione del browser non ripresa: %s", errore)
+        return
+    if utente is None:
+        st.session_state[CHIAVE_COOKIE] = ("", 0)  # scaduto o ignoto: si toglie
+        return
+    _imposta_accesso(utente)
+    st.session_state[CHIAVE_SESSIONE] = token
+    logger.info("Accesso ripreso dal cookie per l'utente %s", utente.id)
+
+
+def scrivi_cookie_in_attesa() -> None:
+    """Scrive (o cancella) nel browser il cookie della sessione, se ce n'è uno in attesa.
+
+    Il cookie è `SameSite=Strict` e vale per tutto il sito; senza durata sparisce chiudendo il
+    browser. Il token è casuale e il database ne conosce solo l'impronta.
+    """
+    in_attesa = st.session_state[CHIAVE_COOKIE]
+    if in_attesa is None:
+        return
+    token, giorni = in_attesa
+    durata = "" if giorni is None else f"; max-age={int(giorni) * 86400}"
+    st.html(
+        f"<script>document.cookie = '{NOME_COOKIE}={token}; path=/; SameSite=Strict{durata}' + "
+        "(window.location.protocol === 'https:' ? '; Secure' : '');</script>",
+        unsafe_allow_javascript=True,
+    )
+    st.session_state[CHIAVE_COOKIE] = None
+
+
+# --------------------------------------------------------------------------- #
 # Prima riga di ogni pagina
 # --------------------------------------------------------------------------- #
 
 
-def avvia(titolo: str, icona: str = "🐝", *, pubblica: bool = False) -> Servizi:
+def avvia(
+    titolo: str, icona: str = "🐝", *, pubblica: bool = False, router: bool = False
+) -> Servizi:
     """Prepara la pagina: configurazione, stato, servizi. Va chiamata per prima in ogni pagina.
 
     Una pagina non `pubblica` senza accesso si ferma qui (M6-T11). Il router (`Home.py`) già
@@ -459,6 +568,12 @@ def avvia(titolo: str, icona: str = "🐝", *, pubblica: bool = False) -> Serviz
     """
     st.set_page_config(page_title=f"{titolo} · BeeWatch AI", page_icon=icona, layout="wide")
     inizializza_stato()
+    if router:
+        # Una volta per giro, dal router (`Home.py`) che gira prima di ogni pagina: lo stile del
+        # tema attivo, l'accesso ripreso dal cookie, il cookie da scrivere o cancellare.
+        tema.applica_stile()
+        riprendi_accesso()
+        scrivi_cookie_in_attesa()
     if not pubblica and not accesso_effettuato():
         st.info("Per vedere questa pagina accedi a BeeWatch AI.", icon="🔑")
         st.stop()

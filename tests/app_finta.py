@@ -16,7 +16,7 @@ from types import ModuleType
 
 import pytest
 import streamlit as st
-from accesso_finto import UtentiInMemoria
+from accesso_finto import SessioniInMemoria, UtentiInMemoria
 from assistente_finto import RaccoltiVuoti, RiepiloghiInMemoria
 from preferenze_finte import PreferenzeInMemoria
 from previsione_finta import ModelliFinti, PrevisioniInMemoria, ProduzioneFinta
@@ -171,7 +171,8 @@ def servizi_finti(
         raccolti=RaccoltiVuoti(),
         report=ReportInMemoria(),
         preferenze=PreferenzeInMemoria(),
-        utenti=UtentiInMemoria(),
+        utenti=(utenti_finti := UtentiInMemoria()),
+        sessioni=SessioniInMemoria(utenti_finti),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
         llm_in_locale=llm_in_locale,
     )

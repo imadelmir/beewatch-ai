@@ -41,7 +41,9 @@ def test_con_il_server_spento_la_connessione_si_tenta_una_volta_sola(app_pronta,
     assert apiari.letture == 1 and dashboard.chiamate == 0
     [errore] = valori(at.error)
     assert errore.startswith("**Non riesco a raggiungere il database.**") and SPENTO in errore
-    assert "**Database:** non raggiungibile" in valori(at.sidebar.caption)
+    assert "Apiario attivo: non disponibile finché il database non risponde." in valori(
+        at.sidebar.caption
+    )
 
 
 def test_lerrore_di_una_sola_query_non_blocca_le_altre_letture(app_pronta, monkeypatch):

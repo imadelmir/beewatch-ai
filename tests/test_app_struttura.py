@@ -50,6 +50,16 @@ IMPORT_VIETATI = (
 )
 
 
+def carica_tema():
+    """`app/tema.py` senza toccare `sys.path` (non importa nulla dell'app)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("tema_in_prova", APP / "tema.py")
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
 def albero(percorso: Path) -> ast.Module:
     return ast.parse(percorso.read_text(encoding="utf-8"), filename=str(percorso))
 
@@ -83,22 +93,29 @@ def test_il_config_toml_esiste_ed_e_identico_al_paragrafo_5_della_specifica():
     assert config == blocco_toml_della_specifica()
 
 
-def test_i_valori_del_tema_sono_quelli_approvati():
+def test_i_valori_del_tema_sono_quelli_del_mockup():
+    modulo_tema = carica_tema()
     tema = tomllib.loads((RADICE / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
-    base = {k: v for k, v in tema["theme"].items() if not isinstance(v, dict)}
-    approvati = {
-        "base": "light",
-        "primaryColor": "#C77D02",
-        "backgroundColor": "#FFFFFF",
-        "secondaryBackgroundColor": "#FAF6F0",
-        "textColor": "#1A1A1A",
-        "font": "sans serif",
-    }
-    assert {k: base[k] for k in approvati} == approvati
-    # M6-T10: le estensioni usano solo colori della palette del §3
-    assert base["borderColor"] == "#E5DED4" and base["linkColor"] == "#C77D02"
-    assert base["chartCategoricalColors"][:3] == ["#C77D02", "#1A1A1A", "#6B6B6B"]
-    assert tema["theme"]["sidebar"]["backgroundColor"] == "#FFF8E7"
+    for nome in ("light", "dark"):  # tema nativo e variabili del CSS: gli stessi colori
+        nativo, palette = tema["theme"][nome], modulo_tema.PALETTE[nome]
+        assert nativo["primaryColor"] == palette["accento"], nome
+        assert nativo["backgroundColor"] == palette["sfondo"], nome
+        assert nativo["textColor"] == palette["testo"], nome
+        assert nativo["borderColor"] == palette["bordo"], nome
+        assert nativo["greenColor"] == palette["successo"], nome
+        assert nativo["orangeColor"] == palette["attenzione"], nome
+        assert nativo["redColor"] == palette["critico"], nome
+    # i token del design system del mockup
+    assert modulo_tema.PALETTE["light"]["accento"] == "#F5B301"
+    assert modulo_tema.PALETTE["dark"]["accento"] == "#FFC709"
+    assert tema["theme"]["light"]["sidebar"]["backgroundColor"] == "#FFFFFF"
+    # Poppins dal repository, servito dall'app
+    assert tema["theme"]["font"] == "Poppins"
+    for faccia in tema["theme"]["fontFaces"]:
+        assert (APP / faccia["url"].removeprefix("app/")).is_file(), faccia["url"]
+    assert (APP / "static" / "fonts" / "OFL.txt").is_file()  # la licenza va con il font
+    assert tema["server"]["enableStaticServing"] is True
+    assert tema["client"]["toolbarMode"] == "minimal"
     assert tema["server"]["runOnSave"] is False
     assert tema["browser"]["gatherUsageStats"] is False
 
@@ -221,12 +238,19 @@ def test_nessun_sql_nei_file_di_app():
         ), percorso
 
 
-def test_nessun_css_ne_html_iniettato_fuori_da_badge_stato():
-    # Specifica §2, §11 e §13: il tema è nativo; l'unica eccezione è `ui.badge_stato` (M6-T2).
+def test_html_e_javascript_solo_nei_punti_dichiarati():
+    # Specifica §2: lo stile in config.toml e in app/stile/beewatch.css; l'HTML solo in tre file.
+    con_html = {"tema.py", "avvio.py", "ui.py"}
+    con_javascript = {"tema.py", "avvio.py"}  # interruttore del tema e cookie dell'accesso
     for percorso in FILE_APP:
         testo = percorso.read_text(encoding="utf-8")
-        assert "<style" not in testo.lower(), percorso
-        assert "st.html(" not in testo and "components.html" not in testo, percorso
+        if percorso.name != "tema.py":
+            assert "<style" not in testo.lower(), percorso
+        if percorso.name not in con_html:
+            assert "st.html(" not in testo and ".html(" not in testo, percorso
+        if percorso.name not in con_javascript:
+            assert "unsafe_allow_javascript" not in testo and "<script" not in testo, percorso
+        assert "components.html" not in testo, percorso
         if percorso.name != "ui.py":
             assert "unsafe_allow_html" not in testo, percorso
 
@@ -315,7 +339,8 @@ def test_lapiario_attivo_e_una_chiave_dello_stato_inizializzata_in_un_punto():
     sorgente = (APP / "avvio.py").read_text(encoding="utf-8")
     assert 'CHIAVE_APIARIO_ATTIVO = "apiario_attivo_id"' in sorgente
     # utente, apiario attivo, esito dell'ultima scrittura (M6-T3)
-    assert sorgente.count("st.session_state.setdefault(") == 5  # + accesso e onboarding (M6-T11)
+    # + accesso e onboarding (M6-T11); + sessione, ripresa, «ricorda», cookie («Ricordami»)
+    assert sorgente.count("st.session_state.setdefault(") == 9
 
 
 def test_i_due_grep_della_dod_di_m6_t9():
@@ -363,9 +388,11 @@ def test_ogni_chiave_del_tema_esiste_nella_versione_installata():
         assert chiave in ammesse, chiave
 
 
-def test_lo_stile_e_solo_nel_config_toml_senza_file_css():
-    assert not list(APP.rglob("*.css"))
+def test_lo_stile_e_nel_config_toml_e_in_un_solo_file_css():
+    assert sorted(APP.rglob("*.css")) == [APP / "stile" / "beewatch.css"]
     assert not list((RADICE / ".streamlit").glob("*.css"))
+    # Streamlit scarta un blocco di stile che contenga «<»: nemmeno nei commenti
+    assert "<" not in (APP / "stile" / "beewatch.css").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("pacchetto", ["streamlit", "plotly"])
