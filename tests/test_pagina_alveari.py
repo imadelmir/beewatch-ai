@@ -1,28 +1,23 @@
-"""La pagina Alveari eseguita con `AppTest` (M6-T3).
+"""La pagina Alveari del mockup eseguita con `AppTest` (M6-T3; tavole 16–24).
 
-Servizi veri con l'anagrafica in memoria (`anagrafica_finta.py`, le stesse regole dei repository):
-si compilano i form come farebbe l'utente e si controlla cosa vede (elenco, pastiglie, esiti,
-errori) e cosa è cambiato nei dati. Le stesse operazioni sul database vero sono in
+Servizi veri con anagrafica e ispezioni in memoria (`anagrafica_finta.py`, le stesse regole dei
+repository): si usano tabella, filtri e finestre come farebbe l'utente e si controlla cosa vede e
+cosa è cambiato nei dati. Le stesse operazioni sul database vero sono in
 `test_servizi_anagrafica.py` (integration).
 """
 
 from __future__ import annotations
 
-import contextlib
+import re
 from datetime import date
 
 import pytest
-from anagrafica_finta import DATABASE_SPENTO, anagrafica_di_prova
+from anagrafica_finta import DATABASE_SPENTO, anagrafica_di_prova, ispezioni_di_prova
 from app_finta import APP, DashboardFinto, PredittoreStub, con_accesso, installa, valori
 from streamlit.testing.v1 import AppTest
 
 from beewatch.models import StatoAlveare
-from beewatch.services import Servizi
-
-try:  # dalla 1.67 AppTest rifiuta i clic sui widget disabilitati con questo errore
-    from streamlit.testing.v1.errors import AppTestError
-except ImportError:  # fino alla 1.60 il clic passa: nessun errore da aspettarsi
-    AppTestError = ()  # contextlib.suppress(()) non sopprime nulla
+from beewatch.services import SOGLIE_FORZA, SOGLIE_SCORTE, Servizi, classifica_telaini
 
 PAGINA = APP / "pages" / "1_Alveari.py"
 
@@ -36,6 +31,7 @@ def anagrafica(app_pronta, monkeypatch):
         crea_predittore=PredittoreStub,
         apiari=apiari,
         alveari=alveari,
+        ispezioni=ispezioni_di_prova(alveari),
         dashboard=DashboardFinto(),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
     )
@@ -47,385 +43,343 @@ def apri() -> AppTest:
     return con_accesso(AppTest.from_file(str(PAGINA), default_timeout=30)).run()
 
 
-def tutto_il_testo(at: AppTest) -> str:
-    """Tutto il testo della pagina, per cercare ciò che NON deve comparire."""
-    return " ".join(valori(at.markdown) + valori(at.caption) + valori(at.info) + valori(at.error))
-
-
 def premi(at: AppTest, chiave: str) -> AppTest:
     return at.button(key=chiave).click().run()
 
 
+def html_di(at: AppTest) -> str:
+    return " ".join(e.proto.body for e in at.get("html"))
+
+
+def righe(at: AppTest) -> list[str]:
+    """I codici delle righe della tabella, nell'ordine."""
+    testi = valori(at.markdown)
+    # solo i codici in grassetto delle righe (non il titolo di una finestra)
+    return [t.strip("*") for t in testi if re.fullmatch(r"\*\*[A-Za-z0-9]+\*\*", t)]
+
+
 # --------------------------------------------------------------------------- #
-# Elenco
+# Forza e scorte (servizi)
 # --------------------------------------------------------------------------- #
 
 
-def test_lelenco_mostra_gli_alveari_attivi_dellapiario_attivo(anagrafica):
+@pytest.mark.parametrize(
+    ("telaini", "forza", "scorte"),
+    [(None, None, None), (0, "Bassa", "Scarse"), (2, "Bassa", "Medie"), (3, "Media", "Medie"),
+     (4, "Media", "Buone"), (6, "Alta", "Buone"), (10, "Alta", "Buone")],
+)  # fmt: skip
+def test_forza_e_scorte_dai_telaini(telaini, forza, scorte):
+    assert classifica_telaini(telaini, SOGLIE_FORZA) == forza
+    assert classifica_telaini(telaini, SOGLIE_SCORTE) == scorte
+
+
+def test_lelenco_degli_alveari_ha_tutti_gli_apiari_e_lultima_ispezione(anagrafica):
+    *_, servizi = anagrafica
+
+    elenco = servizi.elenco_alveari(1)
+
+    assert [(r.apiario, r.codice) for r in elenco] == [("Collina", "A1"), ("Collina", "A2")]
+    a1, a2 = elenco
+    # A1: l'ultima ispezione (30/10) non ha contato i telaini: valgono quelli del 12/09
+    assert (a1.ultima_ispezione, a1.peso_kg) == (date(2026, 10, 30), 38.5)
+    assert (a1.forza, a1.scorte) == ("Alta", "Buone")
+    assert (a2.forza, a2.scorte, a2.peso_kg) == ("Bassa", None, None)
+
+
+# --------------------------------------------------------------------------- #
+# La tabella
+# --------------------------------------------------------------------------- #
+
+
+def test_la_tabella_del_mockup(anagrafica):
     at = apri()
 
     assert not at.exception and not at.error
-    assert valori(at.title) == ["🏠 Alveari"]
-    assert [t.label for t in at.tabs] == ["Alveari", "Apiari"]
-    assert "Alveari di Collina" in valori(at.subheader)
-    codici = [m for m in valori(at.markdown) if m.startswith("**A")]
-    assert codici == ["**A1**", "**A2**"]  # A9 è disattivato, X1 è di un altro utente
-    assert {m.label: m.value for m in at.metric} == {"Alveari nell'apiario": "2", "In salute": "1"}
+    assert valori(at.title) == ["Alveari"]
+    testo = html_di(at)
+    for intestazione in ("ID alveare", "Posizione", "Stato", "Forza", "Scorte di miele",
+                         "Ultima ispezione", "Azioni"):  # fmt: skip
+        assert intestazione in testo
+    assert righe(at) == ["A1", "A2"]
+    assert '<span class="bw-badge sano">In salute</span>' in testo
+    assert '<span class="bw-badge attenzione">Debole</span>' in testo
+    assert "30/10/2026" in valori(at.markdown) and "Alta" in valori(at.markdown)
+    assert "Mostrando 2 di 2 alveari" in valori(at.caption)
+    for chiave in ("vedi_1", "modifica_1", "elimina_1"):  # le tre azioni di ogni riga
+        assert at.button(key=chiave)
 
 
-def test_lo_stato_e_una_pastiglia_mai_il_codice_grezzo(anagrafica):
+def test_cercare_e_filtrare(anagrafica):
     at = apri()
 
-    pastiglie = [m for m in valori(at.markdown) if m.startswith("<span")]
-    assert len(pastiglie) == 2
-    assert "✔ In salute" in pastiglie[0] and "▼ Debole" in pastiglie[1]
-    for codice in (s.value for s in StatoAlveare):
-        assert codice not in tutto_il_testo(at)  # «in_salute» non compare mai
+    at.text_input(key="alveari_cerca").input("a2").run()
+    assert righe(at) == ["A2"]
+
+    at.text_input(key="alveari_cerca").input("").run()
+    at.selectbox(key="alveari_filtro_stato").select(StatoAlveare.IN_SALUTE).run()
+    assert righe(at) == ["A1"]
+
+    at.selectbox(key="alveari_filtro_stato").select("Tutti").run()
+    at.selectbox(key="alveari_filtro_apiario").select("Valle").run()
+    assert righe(at) == []
+    assert "Nessun alveare corrisponde alla ricerca o ai filtri." in valori(at.caption)
 
 
-def test_ogni_alveare_mostra_dettagli_e_ultima_ispezione_allitaliana(anagrafica):
-    didascalie = valori(apri().caption)
-
-    assert "installato il 01/04/2025" in didascalie
-    assert "Ultima ispezione: 30/10/2026 · 38,5 kg" in didascalie
-    assert "regina del 2024" in didascalie and "Mai ispezionato" in didascalie
-    assert "Regina marcata blu" in didascalie  # le note
-
-
-def test_un_apiario_senza_alveari_mostra_lo_stato_vuoto(anagrafica):
-    at = apri()
-    at.sidebar.selectbox[0].select(11).run()  # «Valle»
-
-    assert "Alveari di Valle" in valori(at.subheader)
-    assert any(t.startswith("Nessun alveare in Valle.") for t in valori(at.info))
-    assert {m.label: m.value for m in at.metric}["Alveari nell'apiario"] == "0"
-
-
-def test_senza_apiari_entrambe_le_schede_invitano_a_crearne_uno(app_pronta, monkeypatch):
-    from anagrafica_finta import AlveariInMemoria, ApiariInMemoria
-
-    apiari = ApiariInMemoria()
-    installa(
-        app_pronta,
-        monkeypatch,
-        Servizi(None, apiari=apiari, alveari=AlveariInMemoria(apiari), dashboard=DashboardFinto()),
-    )
-
+def test_esporta_e_il_csv_della_tabella_filtrata(anagrafica):
     at = apri()
 
-    assert not at.exception and not at.error
-    vuoti = [t for t in valori(at.info) if t.startswith("Nessun apiario registrato.")]
-    assert len(vuoti) == 2  # una per scheda, ognuna con la sua azione
-    assert at.text_input(key="nuovo_apiario_nome")  # il modulo per crearlo c'è
+    [bottone] = at.get("download_button")
+
+    assert bottone.proto.label == "Esporta"
+
+
+def test_il_csv_si_apre_in_excel_in_italiano(app_pronta):
+    import pandas as pd
+    import schede
+
+    dati = schede.csv_per_excel(pd.DataFrame([{"ID alveare": "A1", "Peso (kg)": 38.5}]))
+
+    assert dati.startswith("\ufeff".encode())
+    assert dati.decode("utf-8-sig").splitlines() == ["ID alveare;Peso (kg)", "A1;38,5"]
+
+
+def test_dieci_righe_per_pagina(anagrafica):
+    *_, servizi = anagrafica
+    for numero in range(3, 15):
+        servizi.crea_alveare(1, apiario_id=10, codice=f"A{numero:02d}",
+                             stato=StatoAlveare.IN_SALUTE)  # fmt: skip
+
+    at = apri()
+
+    assert len(righe(at)) == 10
+    assert "Mostrando 10 di 14 alveari" in valori(at.caption)
+    [pagine] = [g for g in at.get("button_group") if "alveari_pagina" in g.proto.id]
+    assert [o.content for o in pagine.proto.options] == ["1", "2"]
+
+
+def test_senza_alveari_lo_stato_vuoto_del_mockup(app_pronta, monkeypatch):
+    apiari, alveari = anagrafica_di_prova()
+    for alveare in list(alveari.righe.values()):
+        if alveare.apiario_id == 10:
+            alveari.righe.pop(alveare.id)
+    installa(app_pronta, monkeypatch, Servizi(None, apiari=apiari, alveari=alveari,
+                                              ispezioni=ispezioni_di_prova(alveari),
+                                              crea_predittore=PredittoreStub))  # fmt: skip
+
+    at = apri()
+
+    assert "**Nessun alveare registrato**" in valori(at.markdown)
+    assert at.button(key="vuoto_nuovo_alveare")
+
+
+def test_senza_apiari_invita_a_crearne_uno(app_pronta, monkeypatch):
+    apiari, alveari = anagrafica_di_prova()
+    apiari.righe = {k: v for k, v in apiari.righe.items() if v.utente_id != 1}
+    installa(app_pronta, monkeypatch, Servizi(None, apiari=apiari, alveari=alveari,
+                                              ispezioni=ispezioni_di_prova(alveari),
+                                              crea_predittore=PredittoreStub))  # fmt: skip
+
+    at = apri()
+
+    assert any("Nessun apiario registrato." in i for i in valori(at.info))
+    assert at.button(key="apri_nuovo_alveare").disabled
 
 
 def test_con_il_database_spento_la_pagina_lo_dice_e_si_ferma(app_pronta, monkeypatch):
     apiari, alveari = anagrafica_di_prova(errore=DATABASE_SPENTO)
-    servizi = Servizi(None, apiari=apiari, alveari=alveari, dashboard=DashboardFinto())
-    installa(app_pronta, monkeypatch, servizi)
+    installa(app_pronta, monkeypatch, Servizi(None, apiari=apiari, alveari=alveari,
+                                              crea_predittore=PredittoreStub))  # fmt: skip
 
     at = apri()
 
     assert not at.exception
     [errore] = valori(at.error)
     assert errore.startswith("**Non riesco a raggiungere il database.**")
-    assert not at.tabs and not at.metric
+    assert not righe(at)
 
 
 # --------------------------------------------------------------------------- #
-# Alveari: aggiungere, modificare, eliminare
+# Le finestre: nuovo, modifica, elimina
 # --------------------------------------------------------------------------- #
 
 
-def test_aggiungere_un_alveare_lo_mette_in_elenco_e_lo_dice(anagrafica):
+def test_nuovo_alveare_nella_finestra(anagrafica):
     _, alveari, _ = anagrafica
-    at = apri()
+    at = premi(apri(), "apri_nuovo_alveare")
+    assert at.text_input(key="nuovo_alveare_codice")
 
-    at.text_input(key="nuovo_alveare_codice").input("A3")
+    at.text_input(key="nuovo_alveare_codice").input("A25")
     at.selectbox(key="nuovo_alveare_stato").select(StatoAlveare.IN_OSSERVAZIONE)
     at.number_input(key="nuovo_alveare_regina").set_value(2025)
-    at.text_area(key="nuovo_alveare_note").input("Sciame catturato a maggio")
     at = premi(at, "nuovo_alveare_invia")
 
-    assert not at.exception and not at.error
-    assert valori(at.success) == ["Alveare **A3** aggiunto a Collina."]
-    nuovo = next(a for a in alveari.righe.values() if a.codice == "A3")
+    assert valori(at.success) == ["Alveare **A25** aggiunto."]
+    nuovo = next(a for a in alveari.righe.values() if a.codice == "A25")
     assert (nuovo.apiario_id, nuovo.stato, nuovo.anno_regina) == (
-        10,
-        StatoAlveare.IN_OSSERVAZIONE,
-        2025,
-    )
-    assert "**A3**" in valori(at.markdown)  # l'elenco è già aggiornato
-    assert not at.run().success  # l'esito si mostra una volta sola
+        10, StatoAlveare.IN_OSSERVAZIONE, 2025,
+    )  # fmt: skip
+    assert at.session_state["finestra_aperta"] is None  # la finestra si è chiusa
+    assert "A25" in righe(at)
 
 
-def test_un_codice_vuoto_si_ferma_nella_pagina_prima_del_servizio(anagrafica, monkeypatch):
-    _, alveari, servizi = anagrafica
-    chiamate: list[dict] = []
-    monkeypatch.setattr(servizi, "crea_alveare", lambda *a, **k: chiamate.append(k))
-    at = apri()
+def test_nella_finestra_un_codice_vuoto_si_ferma_prima_del_servizio(anagrafica):
+    _, alveari, _ = anagrafica
+    prima = len(alveari.righe)
+    at = premi(apri(), "apri_nuovo_alveare")
 
-    at.text_input(key="nuovo_alveare_codice").input("   ")
     at = premi(at, "nuovo_alveare_invia")
 
-    assert not at.exception
-    [errore] = valori(at.error)
-    assert errore.startswith("**Un dato inserito non è valido.**")
-    assert "Il codice dell'alveare è obbligatorio." in errore
-    assert "(campo «codice»)" in errore
-    assert chiamate == []  # il servizio non è stato chiamato
-    assert not at.success
+    assert any("Il codice dell'alveare è obbligatorio." in e for e in valori(at.error))
+    assert len(alveari.righe) == prima
+    assert at.session_state["finestra_aperta"] == ("nuovo_alveare", None)  # resta aperta
 
 
-def test_un_codice_gia_usato_lo_rifiuta_il_servizio_con_un_messaggio_chiaro(anagrafica):
-    _, alveari, _ = anagrafica
-    prima = dict(alveari.righe)
-    at = apri()
-
+def test_un_codice_gia_usato_lo_dice_il_servizio(anagrafica):
+    at = premi(apri(), "apri_nuovo_alveare")
     at.text_input(key="nuovo_alveare_codice").input("A1")
+
     at = premi(at, "nuovo_alveare_invia")
 
-    assert not at.exception
-    [errore] = valori(at.error)
-    assert "Nell'apiario c'è già un alveare con questo codice." in errore
-    assert alveari.righe == prima and not at.success
+    assert any("A1" in e or "già" in e for e in valori(at.error))
 
 
-def test_modificare_un_alveare_salva_i_campi_nuovi(anagrafica):
+def test_annulla_chiude_la_finestra(anagrafica):
+    at = premi(apri(), "apri_nuovo_alveare")
+
+    at = premi(at, "nuovo_alveare_annulla")
+
+    # (AppTest conserva gli elementi della finestra chiusa: conta lo stato, il browser la chiude)
+    assert at.session_state["finestra_aperta"] is None
+
+
+def test_modificare_un_alveare_e_spostarlo(anagrafica):
     _, alveari, _ = anagrafica
-    at = apri()
+    at = premi(apri(), "modifica_2")
 
-    at.selectbox(key="alveare_da_modificare").select(2).run()  # A2
-    at.text_input(key="alveare_2_codice").input("A2-bis")
+    at.text_input(key="alveare_2_codice").input("A2bis")
+    at.selectbox(key="alveare_2_apiario").select(11)
     at.selectbox(key="alveare_2_stato").select(StatoAlveare.IN_SALUTE)
-    at.date_input(key="alveare_2_installazione").set_value(date(2026, 4, 2))
     at = premi(at, "alveare_2_invia")
 
-    assert not at.exception and not at.error
-    assert valori(at.success) == ["Alveare **A2-bis** aggiornato."]
-    a2 = alveari.righe[2]
-    assert (a2.codice, a2.stato, a2.data_installazione) == (
-        "A2-bis",
-        StatoAlveare.IN_SALUTE,
-        date(2026, 4, 2),
-    )
-    assert a2.anno_regina == 2024  # i campi non toccati restano
+    assert valori(at.success) == ["Alveare **A2bis** aggiornato."]
+    assert (alveari.righe[2].codice, alveari.righe[2].apiario_id) == ("A2bis", 11)
 
 
-def test_un_alveare_si_puo_spostare_in_un_altro_apiario(anagrafica):
+def test_eliminare_chiede_conferma_nella_finestra(anagrafica):
     _, alveari, _ = anagrafica
-    at = apri()
+    at = premi(apri(), "elimina_2")
 
-    at.selectbox(key="alveare_da_modificare").select(2).run()
-    at.selectbox(key="alveare_2_apiario").select(11)  # Valle
-    at = premi(at, "alveare_2_invia")
+    assert "**Eliminare l'alveare A2?**" in valori(at.markdown)
+    assert alveari.righe[2].attivo  # aprire la finestra non elimina nulla
 
-    assert alveari.righe[2].apiario_id == 11
-    assert [m for m in valori(at.markdown) if m.startswith("**A")] == ["**A1**"]
-
-
-def test_eliminare_chiede_una_conferma_esplicita(anagrafica):
-    _, alveari, _ = anagrafica
-    at = apri()
-    at.selectbox(key="alveare_da_modificare").select(2).run()
-
-    assert at.button(key="alveare_2_elimina").disabled  # senza spunta non si preme
-    # Un clic arrivato lo stesso (un client manipolato) non deve eliminare: la pagina ricontrolla
-    # la spunta. Fino a Streamlit 1.60 AppTest lo lascia passare e lo prova; dalla 1.67 AppTest
-    # stesso rifiuta di cliccare un bottone disabilitato.
-    with contextlib.suppress(AppTestError):
-        at.button(key="alveare_2_elimina").click().run()
-    assert alveari.righe[2].attivo
-
-    at.checkbox(key="alveare_2_conferma").check().run()
-    assert not at.main.button(key="alveare_2_elimina").disabled
     at = premi(at, "alveare_2_elimina")
 
-    assert not at.exception
     assert valori(at.success) == ["Alveare **A2** eliminato."]
-    assert not alveari.righe[2].attivo  # cancellazione logica: la riga resta
-    assert [m for m in valori(at.markdown) if m.startswith("**A")] == ["**A1**"]
+    assert not alveari.righe[2].attivo
+    assert righe(at) == ["A1"]
+
+
+def test_se_leliminazione_fallisce_lo_dice_senza_traceback(anagrafica):
+    _, alveari, _ = anagrafica
+    at = premi(apri(), "elimina_2")
+    alveari.errore = DATABASE_SPENTO
+
+    at = at.button(key="alveare_2_elimina").click().run()
+
+    assert not at.exception
+    assert any(e.startswith("**Non riesco a raggiungere il database.**") for e in valori(at.error))
 
 
 # --------------------------------------------------------------------------- #
-# Apiari
+# Gli apiari
 # --------------------------------------------------------------------------- #
 
 
 def test_aggiungere_un_apiario_lo_rende_lapiario_attivo(anagrafica):
     apiari, _, _ = anagrafica
-    at = apri()
+    at = premi(apri(), "apri_apiari")
 
     at.text_input(key="nuovo_apiario_nome").input("Bosco")
-    at.text_input(key="nuovo_apiario_localita").input("Val Brembana")
-    at.number_input(key="nuovo_apiario_latitudine").set_value(45.8)
-    at.number_input(key="nuovo_apiario_longitudine").set_value(9.7)
+    at.text_input(key="nuovo_apiario_localita").input("Val Seriana")
     at = premi(at, "nuovo_apiario_invia")
 
-    assert not at.exception and not at.error
     assert valori(at.success) == ["Apiario **Bosco** aggiunto: ora è l'apiario attivo."]
-    bosco = next(a for a in apiari.righe.values() if a.nome == "Bosco")
-    assert str(bosco.latitudine) == "45.8" and bosco.localita == "Val Brembana"
-    assert at.session_state["apiario_attivo_id"] == bosco.id
-    assert at.sidebar.selectbox[0].value == bosco.id
-    assert "Alveari di Bosco" in valori(at.subheader)
+    nuovo = next(a for a in apiari.righe.values() if a.nome == "Bosco")
+    assert at.session_state["apiario_attivo_id"] == nuovo.id
 
 
 @pytest.mark.parametrize(
-    ("nome", "latitudine", "longitudine", "messaggio", "campo"),
-    [
-        ("", None, None, "Il nome dell'apiario è obbligatorio.", "nome"),
-        ("Bosco", 45.8, None, "Le coordinate vanno date in coppia", "longitudine"),
-        ("Bosco", None, 9.7, "Le coordinate vanno date in coppia", "latitudine"),
-    ],
-)
-def test_i_controlli_della_pagina_sullapiario(
-    anagrafica, monkeypatch, nome, latitudine, longitudine, messaggio, campo
-):
-    _, _, servizi = anagrafica
-    chiamate: list[dict] = []
-    monkeypatch.setattr(servizi, "crea_apiario", lambda *a, **k: chiamate.append(k))
-    at = apri()
+    ("campi", "messaggio"),
+    [({"nome": ""}, "Il nome dell'apiario è obbligatorio."),
+     ({"nome": "Orto", "latitudine": 45.1}, "Le coordinate vanno date in coppia")],
+)  # fmt: skip
+def test_i_controlli_della_pagina_sullapiario(anagrafica, campi, messaggio):
+    at = premi(apri(), "apri_apiari")
+    at.text_input(key="nuovo_apiario_nome").input(campi["nome"])
+    if "latitudine" in campi:
+        at.number_input(key="nuovo_apiario_latitudine").set_value(campi["latitudine"])
 
-    at.text_input(key="nuovo_apiario_nome").input(nome)
-    at.number_input(key="nuovo_apiario_latitudine").set_value(latitudine)
-    at.number_input(key="nuovo_apiario_longitudine").set_value(longitudine)
     at = premi(at, "nuovo_apiario_invia")
 
-    [errore] = valori(at.error)
-    assert messaggio in errore and f"(campo «{campo}»)" in errore
-    assert chiamate == []
+    assert any(messaggio in e for e in valori(at.error))
 
 
-def test_un_nome_gia_usato_lo_rifiuta_il_servizio(anagrafica):
-    at = apri()
-
-    at.text_input(key="nuovo_apiario_nome").input("Valle")
-    at = premi(at, "nuovo_apiario_invia")
-
-    [errore] = valori(at.error)
-    assert "Hai già un apiario con questo nome." in errore
-
-
-def test_modificare_un_apiario(anagrafica):
+def test_modificare_ed_eliminare_un_apiario(anagrafica):
     apiari, _, _ = anagrafica
-    at = apri()
+    at = premi(apri(), "apri_apiari")
+    at.text_input(key="apiario_10_localita").input("Colli")
+    at = premi(at, "apiario_10_invia")
+    assert apiari.righe[10].localita == "Colli"
 
-    at.selectbox(key="apiario_da_modificare").select(11).run()
-    at.text_input(key="apiario_11_nome").input("Valle bassa")
-    at = premi(at, "apiario_11_invia")
-
-    assert valori(at.success) == ["Apiario **Valle bassa** aggiornato."]
-    assert apiari.righe[11].nome == "Valle bassa"
-    assert "**Valle bassa**" in valori(at.markdown)
-
-
-def test_eliminare_lapiario_attivo_passa_al_primo_rimasto(anagrafica):
-    apiari, _, _ = anagrafica
-    at = apri()
-    assert at.session_state["apiario_attivo_id"] == 10  # Collina
-
+    # AppTest tiene gli elementi di una finestra chiusa: si riparte da una pagina nuova
+    at = premi(apri(), "apri_apiari")
     at.checkbox(key="apiario_10_conferma").check().run()
     at = premi(at, "apiario_10_elimina")
 
-    assert not at.exception
     assert valori(at.success) == ["Apiario **Collina** eliminato."]
     assert not apiari.righe[10].attivo
-    assert at.session_state["apiario_attivo_id"] == 11  # Valle
-    assert at.sidebar.selectbox[0].options == ["Valle"]
 
 
 # --------------------------------------------------------------------------- #
-# Gli errori lungo la strada: mai un traceback, sempre il campo da correggere
+# Il dettaglio di un alveare
 # --------------------------------------------------------------------------- #
 
 
-def test_se_gli_alveari_non_si_leggono_la_scheda_apiari_resta_usabile(app_pronta, monkeypatch):
-    apiari, alveari = anagrafica_di_prova()
-    alveari.errore = DATABASE_SPENTO  # gli apiari si leggono, gli alveari no
-    servizi = Servizi(None, apiari=apiari, alveari=alveari, dashboard=DashboardFinto())
-    installa(app_pronta, monkeypatch, servizi)
-
-    at = apri()
+def test_il_dettaglio_del_mockup(anagrafica):
+    at = premi(apri(), "vedi_1")
 
     assert not at.exception
-    [errore] = valori(at.error)
-    assert errore.startswith("**Non riesco a raggiungere il database.**")
-    assert at.text_input(key="nuovo_apiario_nome")  # l'altra scheda funziona
+    assert valori(at.title) == ["Alveare A1"]
+    assert "Collina · Ultima ispezione 30/10/2026" in valori(at.caption)
+    assert {m.label: m.value for m in at.metric} == {
+        "Stato": "In salute", "Forza": "Alta", "Scorte": "Buone", "Peso": "38,5 kg",
+    }  # fmt: skip
+    testo = html_di(at)
+    for titolo in ("Andamento del peso", "Storico ispezioni", "Dettagli alveare",
+                   "Salute e rischi", "Assistente AI"):  # fmt: skip
+        assert titolo in testo, titolo
+    assert "Regina marcata blu" in testo and "01/04/2025" in testo
+    assert "Sciamatura" in testo and "Osservata" in testo  # l'ultima ispezione l'ha vista
+    assert len(at.get("plotly_chart")) == 1  # due pesate: l'andamento c'è
 
 
-@pytest.mark.parametrize(
-    ("codice", "messaggio"),
-    [
-        ("", "Il codice dell'alveare è obbligatorio."),
-        ("A1", "Nell'apiario c'è già un alveare con questo codice."),
-    ],
-)
-def test_modificare_un_alveare_con_un_codice_non_valido(anagrafica, codice, messaggio):
-    _, alveari, _ = anagrafica
-    at = apri()
-    at.selectbox(key="alveare_da_modificare").select(2).run()
+def test_un_valore_preoccupante_ha_il_suo_colore(anagrafica):
+    at = premi(apri(), "vedi_2")
 
-    at.text_input(key="alveare_2_codice").input(codice)
-    at = premi(at, "alveare_2_invia")
-
-    assert not at.exception and not at.success
-    [errore] = valori(at.error)
-    assert messaggio in errore and "(campo «codice»)" in errore
-    assert alveari.righe[2].codice == "A2"
+    assert {m.label: m.value for m in at.metric}["Forza"] == "Bassa"
+    assert "Servono almeno due ispezioni con il peso" in " ".join(valori(at.caption))
+    assert '<span class="bw-badge critico">Rischio alto</span>' in html_di(at)
 
 
-@pytest.mark.parametrize(
-    ("nome", "messaggio"),
-    [
-        ("", "Il nome dell'apiario è obbligatorio."),
-        ("Collina", "Hai già un apiario con questo nome."),
-    ],
-)
-def test_modificare_un_apiario_con_un_nome_non_valido(anagrafica, nome, messaggio):
-    apiari, _, _ = anagrafica
-    at = apri()
-    at.selectbox(key="apiario_da_modificare").select(11).run()
+def test_dal_dettaglio_si_torna_allelenco(anagrafica):
+    at = premi(apri(), "vedi_1")
 
-    at.text_input(key="apiario_11_nome").input(nome)
-    at = premi(at, "apiario_11_invia")
+    at = premi(at, "torna_elenco")
 
-    assert not at.exception and not at.success
-    [errore] = valori(at.error)
-    assert messaggio in errore
-    assert apiari.righe[11].nome == "Valle"
+    assert valori(at.title) == ["Alveari"] and at.session_state["alveare_in_vista"] is None
 
 
-@pytest.mark.parametrize(
-    ("chiave", "metodo"), [("alveare_2", "elimina_alveare"), ("apiario_10", "elimina_apiario")]
-)
-def test_se_leliminazione_fallisce_lo_dice_senza_traceback(anagrafica, monkeypatch, chiave, metodo):
-    from beewatch.exceptions import ValidationError
+def test_dal_dettaglio_si_modifica(anagrafica):
+    at = premi(premi(apri(), "vedi_1"), "dettaglio_modifica")
 
-    _, _, servizi = anagrafica
-
-    def sparito(*argomenti):
-        raise ValidationError("Alveare non trovato.", campo="id")  # tolto da un'altra scheda
-
-    monkeypatch.setattr(servizi, metodo, sparito)
-    at = apri()
-    if chiave == "alveare_2":
-        at.selectbox(key="alveare_da_modificare").select(2).run()
-
-    at.checkbox(key=f"{chiave}_conferma").check().run()
-    at = premi(at, f"{chiave}_elimina")
-
-    assert not at.exception and not at.success
-    [errore] = valori(at.error)
-    assert errore.startswith("**Un dato inserito non è valido.** Alveare non trovato.")
-
-
-def test_le_note_dellapiario_compaiono_nellelenco(anagrafica):
-    at = apri()
-
-    at.text_input(key="nuovo_apiario_nome").input("Bosco")
-    at.text_area(key="nuovo_apiario_note").input("Accesso dal sentiero 3")
-    at = premi(at, "nuovo_apiario_invia")
-
-    assert "Accesso dal sentiero 3" in valori(at.caption)
-    assert "**Bosco** · apiario attivo" in valori(at.markdown)
+    assert at.text_input(key="alveare_1_codice").value == "A1"

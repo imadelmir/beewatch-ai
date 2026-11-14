@@ -156,7 +156,7 @@ def test_dopo_laccesso_le_pagine_si_raggiungono(utenti):
 
     at.switch_page("pages/1_Alveari.py").run()
 
-    assert not at.exception and valori(at.title) == ["🏠 Alveari"]
+    assert not at.exception and valori(at.title) == ["Alveari"]
 
 
 def test_esci_riporta_ad_accedi(utenti):

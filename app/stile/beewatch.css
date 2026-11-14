@@ -685,3 +685,157 @@ section[data-testid="stSidebar"] {
   background: var(--bw-accento);
   color: #1E1A12;
 }
+
+[class*="_tono_attenzione"] [data-testid="stMetricValue"] { color: var(--bw-attenzione); }
+[class*="_tono_critico"] [data-testid="stMetricValue"] { color: var(--bw-critico); }
+[class*="_tono_successo"] [data-testid="stMetricValue"] { color: var(--bw-successo); }
+.st-key-bw_kpi_forza [data-testid="stMetric"]::after,
+[class*="st-key-bw_kpi_forza_"] [data-testid="stMetric"]::after { background-image: var(--bw-icona-forza); }
+.st-key-bw_kpi_peso [data-testid="stMetric"]::after,
+[class*="st-key-bw_kpi_peso_"] [data-testid="stMetric"]::after { background-image: var(--bw-icona-peso); }
+[class*="st-key-bw_kpi_miele_"] [data-testid="stMetric"]::after { background-image: var(--bw-icona-miele); }
+[class*="st-key-bw_kpi_alveare_"] [data-testid="stMetric"]::after { background-image: var(--bw-icona-alveare); }
+
+/* ---------------------------------------------------------------- tabelle (Alveari, Ispezioni) */
+
+.bw-tabella-testa {
+  display: grid;
+  grid-template-columns: 1.1fr 1.7fr 1.7fr 1.1fr 1.3fr 1.5fr 1.4fr;
+  gap: 1rem;
+  padding: 0.6rem 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--bw-testo2);
+}
+
+[class*="st-key-bw_riga_"] {
+  border-top: 1px solid var(--bw-bordo);
+  padding: 0.15rem 0.25rem;
+}
+
+[class*="st-key-bw_riga_"] p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+[class*="st-key-bw_riga_"] [data-testid="stBaseButton-tertiary"] {
+  color: var(--bw-testo2);
+  min-height: 1.8rem;
+  padding: 0 0.25rem;
+}
+
+[class*="st-key-bw_cestino_"] [data-testid="stBaseButton-tertiary"] {
+  color: var(--bw-critico);
+}
+
+.st-key-bw_pagine {
+  align-items: flex-end;
+}
+
+.st-key-bw_pagine [data-testid="stButtonGroup"] button[aria-checked="true"] {
+  background: var(--bw-accento);
+  color: #1E1A12;
+  border-color: var(--bw-accento);
+}
+
+/* lo stato vuoto (mockup «Nessun alveare registrato») */
+.st-key-bw_vuoto {
+  align-items: center;
+  text-align: center;
+  padding: 3rem 1rem;
+  background: var(--bw-superficie);
+  border: 1px solid var(--bw-bordo);
+  border-radius: 16px;
+}
+
+.bw-vuoto-icona {
+  font-size: 3.5rem;
+  line-height: 1;
+  color: var(--bw-accento);
+}
+
+/* la finestra «Eliminare l'alveare?» */
+.st-key-bw_conferma_elimina {
+  align-items: center;
+  text-align: center;
+}
+
+.bw-avviso-tondo {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--bw-critico);
+  background: var(--bw-critico-tenue);
+}
+
+.st-key-bw_bottone_elimina button {
+  background: var(--bw-critico);
+  border-color: var(--bw-critico);
+  color: #FFFFFF;
+}
+
+/* le barre di «Salute e rischi» */
+.bw-barra {
+  margin: 0.4rem 0 0.9rem 0;
+}
+
+.bw-barra-testa {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+  color: var(--bw-testo);
+}
+
+.bw-barra-fondo {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bw-bordo);
+  overflow: hidden;
+}
+
+.bw-barra-fondo span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.bw-barra-fondo .successo { background: var(--bw-successo); }
+.bw-barra-fondo .attenzione { background: var(--bw-attenzione); }
+.bw-barra-fondo .critico { background: var(--bw-critico); }
+
+/* l'assistente nel dettaglio dell'alveare: bordo giallo, come «Suggerimento AI» */
+.st-key-bw_card_ai {
+  border-color: var(--bw-accento);
+}
+
+/* nel dettaglio di un alveare le card sono più strette: valori più piccoli, come nel mockup */
+.st-key-bw_dettaglio_kpi [data-testid="stMetricValue"] {
+  font-size: 1.45rem;
+}
+
+.st-key-bw_dettaglio_kpi [data-testid="stMetric"] {
+  min-height: 104px;
+}
+
+/* dentro le finestre (st.dialog) il modulo è piatto, come nel mockup */
+[role="dialog"] [data-testid="stForm"] {
+  background: transparent;
+  border: none !important;
+  box-shadow: none;
+  padding: 0;
+}
+
+.st-key-bw_conferma_elimina [data-testid="stMarkdownContainer"],
+.st-key-bw_conferma_elimina [data-testid="stCaptionContainer"] {
+  text-align: center;
+}
+
+.st-key-bw_conferma_elimina [data-testid="stMarkdownContainer"] strong {
+  font-size: 1.15rem;
+}

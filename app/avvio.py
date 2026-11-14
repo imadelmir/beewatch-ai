@@ -49,6 +49,7 @@ from beewatch.services import (
     Promemoria,
     Report,
     RiepilogoSalvato,
+    RigaAlveare,
     Servizi,
     StatoModello,
     StatoPrevedibile,
@@ -88,6 +89,11 @@ CHIAVE_RIPRESA = "ripresa_tentata"
 CHIAVE_RICORDA = "ricorda_accesso"
 CHIAVE_COOKIE = "cookie_in_attesa"
 NOME_COOKIE = "bw_sessione"
+# Le finestre (st.dialog) del mockup: quale è aperta, con l'id a cui si riferisce. Stanno nello
+# stato e non solo nel browser: così la X le chiude davvero (`chiudi_finestra`) e i test le aprono.
+CHIAVE_FINESTRA = "finestra_aperta"
+# Il dettaglio dell'alveare aperto nella pagina Alveari (mockup «Alveare A12»), o None.
+CHIAVE_IN_VISTA = "alveare_in_vista"
 PASSI_ONBOARDING = 2  # primo alveare (con l'apiario), preferenze; il profilo è la registrazione
 
 
@@ -184,6 +190,13 @@ def apiari(utente_id: int) -> tuple[ApiarioScelta, ...]:
 def apiari_in_anagrafica(utente_id: int) -> tuple[Apiario, ...]:
     """Gli apiari con tutti i campi, per la pagina Alveari (sola lettura, `TTL_LETTURE_SECONDI`)."""
     return tuple(servizi().apiari_in_anagrafica(utente_id))
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
+def elenco_alveari(utente_id: int) -> tuple[RigaAlveare, ...]:
+    """Gli alveari di tutti gli apiari, con l'ultima ispezione (tabella Alveari, in cache)."""
+    return tuple(servizi().elenco_alveari(utente_id))
 
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
@@ -328,6 +341,8 @@ def inizializza_stato() -> None:
     st.session_state.setdefault(CHIAVE_RIPRESA, False)
     st.session_state.setdefault(CHIAVE_RICORDA, False)
     st.session_state.setdefault(CHIAVE_COOKIE, None)
+    st.session_state.setdefault(CHIAVE_FINESTRA, None)  # (nome, id) della finestra aperta
+    st.session_state.setdefault(CHIAVE_IN_VISTA, None)
 
 
 def scegli_apiario_iniziale(apiari: tuple[ApiarioScelta, ...]) -> None:
@@ -366,6 +381,33 @@ def imposta_apiario_attivo(apiario_id: int) -> None:
 # --------------------------------------------------------------------------- #
 # Dopo una scrittura
 # --------------------------------------------------------------------------- #
+
+
+def apri_finestra(nome: str, ident: int | None = None) -> None:
+    """Apre una finestra del mockup («nuovo_alveare», «elimina_alveare»…) al prossimo giro."""
+    st.session_state[CHIAVE_FINESTRA] = (nome, ident)
+
+
+def chiudi_finestra() -> None:
+    """Chiude la finestra aperta: dopo un salvataggio, con «Annulla» o con la X."""
+    st.session_state[CHIAVE_FINESTRA] = None
+
+
+def finestra_aperta(nome: str) -> int | None | bool:
+    """L'id della finestra `nome` se è aperta (True se non ha un id), altrimenti False."""
+    aperta = st.session_state[CHIAVE_FINESTRA]
+    if not aperta or aperta[0] != nome:
+        return False
+    return True if aperta[1] is None else aperta[1]
+
+
+def mostra_alveare(alveare_id: int | None) -> None:
+    """Apre (o chiude, con None) il dettaglio di un alveare nella pagina Alveari."""
+    st.session_state[CHIAVE_IN_VISTA] = alveare_id
+
+
+def alveare_in_vista() -> int | None:
+    return st.session_state[CHIAVE_IN_VISTA]
 
 
 def scrittura_riuscita(messaggio: str) -> None:

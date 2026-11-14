@@ -131,6 +131,8 @@ ICONE = {
     "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
     "fatto": '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
     "chat": '<path d="M5 5h14v10H9l-4 4z"/>',
+    "forza": '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
+    "peso": '<circle cx="12" cy="6" r="2"/><path d="M7 8h10l2 12H5z"/>',
 }
 
 

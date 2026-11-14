@@ -763,7 +763,11 @@ def test_ogni_pagina_con_dati_ha_intestazione_e_un_numero_di_contesto(
 
     assert not at.exception
     assert len(at.title) == 1 and len(at.markdown) >= 1  # titolo e riga di contesto
-    assert at.metric and not at.error
+    assert not at.error
+    if pagina.name == "1_Alveari.py":  # mockup: una tabella, non delle metriche
+        assert any("bw-tabella-testa" in e.proto.body for e in at.get("html"))
+        return
+    assert at.metric
     assert all(m.value not in ("", "—") for m in at.metric)
 
 
