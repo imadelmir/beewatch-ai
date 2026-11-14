@@ -44,11 +44,13 @@ from beewatch.services import (
     IspezioneInElenco,
     MetricheModello,
     Panoramica,
+    Report,
     RiepilogoSalvato,
     Servizi,
     StatoModello,
     StatoPrevedibile,
     UtenteAutenticato,
+    VoceArchivio,
     crea_servizi,
 )
 
@@ -244,6 +246,20 @@ def metriche_modello() -> MetricheModello:
 def confronto_previsto_reale(codice_stato: str) -> pd.DataFrame:
     """Stima del modello e resa vera degli ultimi anni di uno stato (sola lettura, in cache)."""
     return servizi().confronto_previsto_reale(codice_stato)
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
+def archivio_report(utente_id: int) -> tuple[VoceArchivio, ...]:
+    """I report salvati dell'utente, dal più recente (sola lettura, in cache)."""
+    return tuple(servizi().archivio_report(utente_id))
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
+def report_salvato(utente_id: int, report_id: int) -> Report:
+    """Un report dell'archivio, com'era quando è stato generato (sola lettura, in cache)."""
+    return servizi().report_salvato(utente_id, report_id)
 
 
 def svuota_letture() -> None:

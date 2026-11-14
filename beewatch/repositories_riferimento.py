@@ -48,6 +48,45 @@ class DashboardRepository(_Repository):
         )[0]
 
 
+class ReportRepository(_Repository):
+    """M6-T12 · l'archivio dei report (`sql/schema_04_report.sql`), sempre filtrato per utente."""
+
+    def salva(
+        self, utente_id: int, apiario_id: int | None, modello: str, titolo: str, contenuto: dict
+    ) -> int:
+        with self._db.transazione() as cursore:
+            cursore.execute(
+                "INSERT INTO report (utente_id, apiario_id, modello, titolo, contenuto_json) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (utente_id, apiario_id, modello, titolo,
+                 json.dumps(contenuto, ensure_ascii=False, allow_nan=False)),
+            )  # fmt: skip
+            return cursore.lastrowid
+
+    def elenco(self, utente_id: int, limite: int = 50) -> list[Riga]:
+        return self._righe(
+            "SELECT id, modello, titolo, apiario_id, creato_il FROM report "
+            "WHERE utente_id = %s ORDER BY creato_il DESC, id DESC LIMIT %s",
+            (utente_id, limite),
+        )
+
+    def trova(self, utente_id: int, report_id: int) -> Riga | None:
+        righe = self._righe(
+            "SELECT id, modello, titolo, apiario_id, contenuto_json, creato_il FROM report "
+            "WHERE id = %s AND utente_id = %s",
+            (report_id, utente_id),
+        )
+        if not righe:
+            return None
+        return {**righe[0], "contenuto_json": _decodifica_json(righe[0]["contenuto_json"])}
+
+    def elimina(self, utente_id: int, report_id: int) -> None:
+        with self._db.transazione() as cursore:
+            _richiedi(cursore, "SELECT 1 FROM report WHERE id = %s AND utente_id = %s",
+                      (report_id, utente_id), _non_trovato("Report", "report_id"))  # fmt: skip
+            cursore.execute("DELETE FROM report WHERE id = %s", (report_id,))
+
+
 class UtentiRepository(_Repository):
     def crea(self, email: str, nome_completo: str, hash_password: str) -> int:
         """M6-T11 · un utente nuovo; l'email (già in minuscolo) dev'essere libera."""

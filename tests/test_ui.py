@@ -453,6 +453,14 @@ def test_grafico_barre_senza_dati_mostra_lo_stato_vuoto(app_pronta):
     assert not at.get("plotly_chart")
 
 
+def test_i_report_usano_le_stesse_etichette_dellinterfaccia(ui):
+    """M6-T12: il report si scrive fuori dall'interfaccia, ma deve dire le stesse parole."""
+    from beewatch.services import ETICHETTE_RISCHIO, ETICHETTE_STATO
+
+    assert ETICHETTE_STATO == {stato: ui.stile_stato(stato)[0] for stato in StatoAlveare}
+    assert ETICHETTE_RISCHIO == ui.ETICHETTE_RISCHIO
+
+
 def test_etichetta_rischio_dice_il_livello_a_parole(ui):
     assert [ui.etichetta_rischio(livello) for livello in LivelloRischio] == [
         "Nessun rischio",

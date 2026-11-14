@@ -24,6 +24,7 @@ tentativo dopo riprova.
 
 from __future__ import annotations
 
+import calendar
 import math
 import re
 import threading
@@ -67,6 +68,7 @@ from beewatch.models import (
     Previsione,
     StatoAlveare,
 )
+from beewatch.report import FORMATI, MODELLI, Report, Sezione, esporta
 from beewatch.repositories import (
     AlveariRepository,
     ApiariRepository,
@@ -79,6 +81,7 @@ from beewatch.repositories_riferimento import (
     ModelliRepository,
     PrevisioniRepository,
     ProduzioneUsdaRepository,
+    ReportRepository,
     RiepiloghiRepository,
     UtentiRepository,
 )
@@ -290,6 +293,34 @@ class UtenteAutenticato:
     email: str
 
 
+MESI = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto",
+        "settembre", "ottobre", "novembre", "dicembre")  # fmt: skip
+GIORNI_DA_CONTROLLARE = 30  # come la Home: oltre, un alveare va rivisto
+ETICHETTE_STATO = {
+    StatoAlveare.IN_SALUTE: "In salute",
+    StatoAlveare.IN_OSSERVAZIONE: "In osservazione",
+    StatoAlveare.DEBOLE: "Debole",
+    StatoAlveare.SCIAMATO: "Sciamato",
+    StatoAlveare.MORTO: "Morto",
+}
+ETICHETTE_RISCHIO = {
+    LivelloRischio.NESSUNO: "Nessun rischio",
+    LivelloRischio.BASSO: "Rischio basso",
+    LivelloRischio.MEDIO: "Rischio medio",
+    LivelloRischio.ALTO: "Rischio alto",
+}
+
+
+@dataclass(frozen=True)
+class VoceArchivio:
+    """Un report nell'archivio, senza il contenuto."""
+
+    id: int
+    modello: str
+    titolo: str
+    creato_il: str  # «gg/mm/aaaa hh:mm»
+
+
 @dataclass(frozen=True)
 class RiepilogoSalvato:
     """Un riepilogo già salvato di un'ispezione, con il modello e il prompt che l'hanno scritto."""
@@ -365,6 +396,24 @@ def _email(valore: Any) -> str:
     return email
 
 
+def _g(giorno: date) -> str:
+    return giorno.strftime("%d/%m/%Y")
+
+
+def _data_ora(valore: Any) -> str:
+    """Una data e ora del database come «gg/mm/aaaa hh:mm»; adesso, se manca."""
+    from datetime import datetime
+
+    momento = valore if isinstance(valore, datetime) else datetime.now()
+    return momento.strftime("%d/%m/%Y %H:%M")
+
+
+def _tipo(tipo: Any) -> str:
+    """Il tipo di miele a parole: «non_definito» diventa «Non definito»."""
+    codice = getattr(tipo, "value", tipo)
+    return str(codice).replace("_", " ").capitalize()
+
+
 def _in_elenco(ispezione: Ispezione, codice_alveare: str) -> IspezioneInElenco:
     peso = ispezione.peso_kg
     return IspezioneInElenco(
@@ -395,6 +444,7 @@ class Servizi:
         riepiloghi: RiepiloghiRepository | None = None,
         dashboard: DashboardRepository | None = None,
         utenti: UtentiRepository | None = None,
+        report: ReportRepository | None = None,
         descrizione_llm: str = "non configurato",
         timeout_llm: int = 60,
         llm_in_locale: bool | None = None,
@@ -415,6 +465,7 @@ class Servizi:
         self._riepiloghi = riepiloghi or RiepiloghiRepository(database)
         self._dashboard = dashboard or DashboardRepository(database)
         self._utenti = utenti or UtentiRepository(database)
+        self._report = report or ReportRepository(database)
         self.descrizione_llm = descrizione_llm  # «modello via provider (chiave: …)», senza segreti
         self._timeout_llm = timeout_llm
         self._llm_in_locale = llm_in_locale
@@ -1043,6 +1094,246 @@ class Servizi:
         return pd.DataFrame(
             righe, columns=["anno", "previsto_kg", "inferiore_kg", "superiore_kg", "reale_kg"]
         )
+
+    # ----------------------------------------------------------------------- #
+    # Report (M6-T12)
+    # ----------------------------------------------------------------------- #
+
+    def crea_report(
+        self,
+        utente_id: int,
+        apiario_id: int,
+        modello: str,
+        *,
+        anno: int | None = None,
+        mese: int | None = None,
+        oggi: date | None = None,
+    ) -> Report:
+        """Genera un report su un apiario dell'utente e lo salva nell'archivio.
+
+        Il contenuto si salva com'è adesso: riaprirlo dopo darà gli stessi numeri.
+
+        Raises:
+            ValidationError: modello, apiario, anno o mese non validi.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        apiario = _id_positivo(apiario_id, "apiario_id", obbligatorio=True)
+        if modello not in MODELLI:
+            raise ValidationError(f"Il modello di report «{modello}» non esiste.", campo="modello")
+        nomi = {a.id: a.nome for a in self._apiari.elenca(utente)}
+        if apiario not in nomi:
+            raise ValidationError("Apiario non trovato.", campo="apiario_id")
+        oggi = oggi or date.today()
+        if modello == "mensile":
+            report = self._report_mensile(
+                utente,
+                apiario,
+                nomi[apiario],
+                oggi.year if anno is None else anno,
+                oggi.month if mese is None else mese,
+                oggi,
+            )
+        elif modello == "produzione":
+            report = self._report_produzione(utente, apiario, nomi[apiario], oggi)
+        else:
+            report = self._report_sanitario(utente, apiario, nomi[apiario], oggi)
+        nuovo = self._report.salva(utente, apiario, modello, report.titolo, report.a_dict())
+        logger.info("Report %s (%s) salvato per l'utente %s", nuovo, modello, utente)
+        return Report.da_dict(report.a_dict(), id=nuovo, creato_il=_data_ora(None))
+
+    def archivio_report(self, utente_id: int, limite: int = 50) -> list[VoceArchivio]:
+        """I report dell'utente, dal più recente."""
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        return [
+            VoceArchivio(id=r["id"], modello=r["modello"], titolo=r["titolo"],
+                         creato_il=_data_ora(r["creato_il"]))
+            for r in self._report.elenco(utente, limite)
+        ]  # fmt: skip
+
+    def report_salvato(self, utente_id: int, report_id: int) -> Report:
+        """Un report dell'archivio, com'era quando è stato generato.
+
+        Raises:
+            ValidationError: il report non c'è o non è dell'utente.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        identificativo = _id_positivo(report_id, "report_id", obbligatorio=True)
+        riga = self._report.trova(utente, identificativo)
+        if riga is None:
+            raise ValidationError("Report non trovato.", campo="report_id")
+        return Report.da_dict(
+            riga["contenuto_json"], id=riga["id"], creato_il=_data_ora(riga["creato_il"])
+        )
+
+    def elimina_report(self, utente_id: int, report_id: int) -> None:
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        identificativo = _id_positivo(report_id, "report_id", obbligatorio=True)
+        self._report.elimina(utente, identificativo)
+
+    @staticmethod
+    def esporta_report(report: Report, formato: str) -> bytes:
+        """Il report in CSV, XLSX o PDF (`beewatch/report.py`)."""
+        if formato not in FORMATI:
+            raise ValidationError(f"Il formato «{formato}» non è disponibile.", campo="formato")
+        return esporta(report, formato)
+
+    def _report_mensile(
+        self, utente: int, apiario: int, nome: str, anno: Any, mese: Any, oggi: date
+    ) -> Report:
+        if not isinstance(mese, int) or isinstance(mese, bool) or not 1 <= mese <= 12:
+            raise ValidationError("Il mese va da 1 a 12.", campo="mese")
+        if not isinstance(anno, int) or isinstance(anno, bool) or not 2000 <= anno <= oggi.year:
+            raise ValidationError(f"L'anno va dal 2000 al {oggi.year}.", campo="anno")
+        dal = date(anno, mese, 1)
+        al = date(anno, mese, calendar.monthrange(anno, mese)[1])
+        alveari = self.alveari_dell_apiario(utente, apiario)
+        codici = {a.id: a.codice for a in alveari}
+        ispezioni = sorted(
+            self.ispezioni_dell_apiario(utente, apiario, dal=dal, al=al),
+            key=lambda i: (i.data_ispezione, i.id),
+        )
+        raccolti = sorted(
+            (
+                r
+                for r in self._raccolti.per_apiario(utente, apiario)
+                if dal <= r.data_raccolto <= al
+            ),
+            key=lambda r: (r.data_raccolto, r.id),
+        )
+        periodo = f"{MESI[mese - 1]} {anno}"
+        ispezionati = f"{len({i.alveare_id for i in ispezioni})} di {len(alveari)}"
+        a_rischio = sum(i.livello_rischio in (LivelloRischio.MEDIO, LivelloRischio.ALTO)
+                        for i in ispezioni)  # fmt: skip
+        return Report(
+            modello="mensile",
+            titolo=f"Report mensile · {nome} · {periodo}",
+            sottotitolo=f"Apiario {nome}, dal {_g(dal)} al {_g(al)}. Generato il {_g(oggi)}.",
+            sintesi=(
+                ("Apiario", nome),
+                ("Periodo", periodo),
+                ("Ispezioni", len(ispezioni)),
+                ("Alveari ispezionati", ispezionati),
+                ("Ispezioni con rischio medio o alto", a_rischio),
+                ("Miele raccolto (kg)", round(sum(float(r.quantita_kg) for r in raccolti), 2)),
+            ),
+            sezioni=(
+                Sezione(
+                    "Ispezioni del mese",
+                    ("Data", "Alveare", "Rischio", "Peso (kg)", "Telaini di covata",
+                     "Telaini di scorte", "Regina vista", "Sciamatura"),
+                    tuple(
+                        (_g(i.data_ispezione), i.codice_alveare,
+                         ETICHETTE_RISCHIO.get(i.livello_rischio, str(i.livello_rischio)),
+                         i.peso_kg, i.telaini_covata, i.telaini_scorte,
+                         "sì" if i.regina_vista else "no", "sì" if i.sciamatura else "no")
+                        for i in ispezioni
+                    ),
+                ),
+                Sezione(
+                    "Raccolti del mese",
+                    ("Data", "Tipo di miele", "Alveare", "Miele (kg)"),
+                    tuple(
+                        (_g(r.data_raccolto), _tipo(r.tipo_miele),
+                         INTERO_APIARIO if r.alveare_id is None
+                         else codici.get(r.alveare_id, ALVEARE_ELIMINATO),
+                         float(r.quantita_kg))
+                        for r in raccolti
+                    ),
+                ),
+            ),
+        )  # fmt: skip
+
+    def _report_produzione(self, utente: int, apiario: int, nome: str, oggi: date) -> Report:
+        dati = self.dashboard_apiario(utente, apiario)
+        raccolti = pd.DataFrame(
+            [{"anno": r.data_raccolto.year, "tipo": _tipo(r.tipo_miele), "kg": float(r.quantita_kg)}
+             for r in self._raccolti.per_apiario(utente, apiario)],
+            columns=["anno", "tipo", "kg"],
+        )  # fmt: skip
+        per_tipo = raccolti.groupby(["anno", "tipo"], as_index=False)["kg"].sum()
+        per_anno = raccolti.groupby("anno")["kg"].sum()
+        migliore = (
+            f"{int(per_anno.idxmax())} ({float(per_anno.max()):.1f} kg)".replace(".", ",")
+            if not per_anno.empty
+            else None
+        )
+        media = dati.media_per_alveare_kg
+        media = None if media is None else round(media, 2)
+        per_alveare = tuple(
+            (r.alveare, round(float(r.kg), 2)) for r in dati.per_alveare.itertuples()
+        )
+        return Report(
+            modello="produzione",
+            titolo=f"Analisi della produzione · {nome}",
+            sottotitolo=f"Apiario {nome}, tutti i raccolti registrati. Generato il {_g(oggi)}.",
+            sintesi=(
+                ("Apiario", nome),
+                ("Miele raccolto in tutto (kg)", round(dati.produzione_totale_kg, 2)),
+                ("Anni con raccolti", int(per_anno.size)),
+                ("Alveari attivi", dati.numero_alveari),
+                ("Media per alveare (kg)", media),
+                ("Anno migliore", migliore),
+            ),
+            sezioni=(
+                Sezione(
+                    "Per anno e tipo di miele",
+                    ("Anno", "Tipo di miele", "Miele (kg)"),
+                    tuple((int(r.anno), r.tipo, round(float(r.kg), 2))
+                          for r in per_tipo.sort_values(["anno", "tipo"]).itertuples()),
+                ),
+                Sezione(
+                    "Per alveare",
+                    ("Alveare", "Miele (kg)"),
+                    per_alveare,
+                    nota=f"«{INTERO_APIARIO}» raccoglie i chili senza un alveare indicato.",
+                ),
+            ),
+        )  # fmt: skip
+
+    def _report_sanitario(self, utente: int, apiario: int, nome: str, oggi: date) -> Report:
+        alveari = self.alveari_dell_apiario(utente, apiario)
+        ultime: dict[int, IspezioneInElenco] = {}
+        for ispezione in self.ispezioni_dell_apiario(utente, apiario):  # dalla più recente
+            ultime.setdefault(ispezione.alveare_id, ispezione)
+        righe = []
+        da_controllare = a_rischio = 0
+        for alveare in alveari:
+            ultima = ultime.get(alveare.id)
+            giorni = (oggi - ultima.data_ispezione).days if ultima else None
+            if giorni is None or giorni > GIORNI_DA_CONTROLLARE:
+                da_controllare += 1
+            if ultima and ultima.livello_rischio in (LivelloRischio.MEDIO, LivelloRischio.ALTO):
+                a_rischio += 1
+            righe.append((
+                alveare.codice, ETICHETTE_STATO.get(alveare.stato, str(alveare.stato)),
+                _g(ultima.data_ispezione) if ultima else "mai ispezionato", giorni,
+                ETICHETTE_RISCHIO.get(ultima.livello_rischio) if ultima else None,
+                ultima.peso_kg if ultima else None,
+            ))  # fmt: skip
+        return Report(
+            modello="sanitario",
+            titolo=f"Stato sanitario · {nome}",
+            sottotitolo=f"Apiario {nome}, situazione al {_g(oggi)}.",
+            sintesi=(
+                ("Apiario", nome),
+                ("Alveari attivi", len(alveari)),
+                ("In salute", sum(a.stato is StatoAlveare.IN_SALUTE for a in alveari)),
+                (f"Da controllare (mai o da oltre {GIORNI_DA_CONTROLLARE} giorni)", da_controllare),
+                ("Con rischio medio o alto all'ultima ispezione", a_rischio),
+            ),
+            sezioni=(
+                Sezione(
+                    "Alveari",
+                    ("Alveare", "Stato", "Ultima ispezione", "Giorni dall'ultima",
+                     "Rischio all'ultima", "Peso all'ultima (kg)"),
+                    tuple(righe),
+                    nota="Un riepilogo dei dati registrati, non una diagnosi: per malattie o "
+                    "parassiti rivolgiti al servizio veterinario della ASL o a un tecnico.",
+                ),
+            ),
+        )  # fmt: skip
 
     # ----------------------------------------------------------------------- #
     # Riepilogo AI di un'ispezione

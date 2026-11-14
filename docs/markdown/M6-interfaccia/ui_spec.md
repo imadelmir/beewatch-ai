@@ -191,8 +191,9 @@ Contenuto, dall'alto in basso:
    `st.session_state` e tutte le pagine la leggono da lì. Cambiare apiario
    aggiorna ogni pagina.
 3. `st.divider()`
-4. **Navigazione** — generata automaticamente da Streamlit dai file in
-   `app/pages/`. Il numero nel nome file decide l'ordine:
+4. **Navigazione** — da **M6-T11** la costruisce `app/Home.py` con
+   `st.navigation()`, in base all'accesso: prima solo Accedi e Registrati, dopo
+   la Home e le pagine di `app/pages/`, nell'ordine del numero nel nome file:
 
    | File | Voce nel menu |
    |---|---|
@@ -202,6 +203,9 @@ Contenuto, dall'alto in basso:
    | `4_Assistente_AI.py` | Assistente AI |
    | `5_Dashboard.py` | Dashboard |
    | `6_Trasparenza.py` | Trasparenza |
+   | `7_Report.py` | Report (M6-T12, oltre alle sei originali) |
+
+   In fondo alla sidebar, dopo l'accesso: chi è entrato e il bottone **Esci**.
 
 5. `st.divider()`
 6. **Stato del sistema** — tre righe compatte in `st.caption`: versione del
