@@ -48,6 +48,7 @@ from beewatch.services import (
     Servizi,
     StatoModello,
     StatoPrevedibile,
+    UtenteAutenticato,
     crea_servizi,
 )
 
@@ -55,9 +56,6 @@ from beewatch.services import (
 # chiamato «avvio» (il nome del modulo, che Streamlit carica a sé) non scriverebbe da nessuna parte.
 logger = ottieni_logger("beewatch.app.avvio")
 
-# DA-02: nessun login, un solo utente dimostrativo (quello del seed). Quando ci sarà
-# l'autenticazione (M6-T11) l'id verrà da lì; le pagine lo leggono già dallo stato della sessione.
-UTENTE_DEMO_ID = 1
 
 # Quanto vive una lettura in cache. Dichiarato qui, non sparso nei decoratori.
 TTL_LETTURE_SECONDI = 60
@@ -74,6 +72,11 @@ CHIAVE_SELETTORE_APIARIO = "selettore_apiario"
 # L'esito dell'ultima scrittura («Alveare A3 aggiunto»): dopo una scrittura la pagina si riesegue
 # da capo (`st.rerun`) per mostrare i dati nuovi, e il messaggio deve sopravvivere a quel giro.
 CHIAVE_ESITO = "esito_operazione"
+# M6-T11: il nome di chi ha fatto l'accesso (None = nessuno: il router mostra Accedi e Registrati)
+# e il passo dell'onboarding guidato dopo la registrazione (None = finito o saltato).
+CHIAVE_ACCESSO = "accesso"
+CHIAVE_ONBOARDING = "onboarding"
+PASSI_ONBOARDING = 3  # primo apiario, primo alveare, tutto pronto
 
 
 # --------------------------------------------------------------------------- #
@@ -260,14 +263,18 @@ def svuota_letture() -> None:
 def inizializza_stato() -> None:
     """Crea le chiavi di `st.session_state` che mancano, senza toccare quelle che ci sono.
 
-    - `utente_id`: l'utente corrente (DA-02: quello dimostrativo);
+    - `utente_id`: l'utente che ha fatto l'accesso, None prima (M6-T11);
     - `apiario_attivo_id`: l'apiario scelto, il contesto di tutte le pagine; `None` finché non si
       sa quali apiari esistono (lo imposta `scegli_apiario_iniziale`);
-    - `esito_operazione`: il messaggio dell'ultima scrittura riuscita, finché non si mostra.
+    - `esito_operazione`: il messaggio dell'ultima scrittura riuscita, finché non si mostra;
+    - `accesso`: il nome di chi ha fatto l'accesso, o None (M6-T11);
+    - `onboarding`: il passo dei primi passi guidati dopo la registrazione, o None.
     """
-    st.session_state.setdefault(CHIAVE_UTENTE, UTENTE_DEMO_ID)
+    st.session_state.setdefault(CHIAVE_UTENTE, None)  # nessuno, finché non c'è l'accesso
     st.session_state.setdefault(CHIAVE_APIARIO_ATTIVO, None)
     st.session_state.setdefault(CHIAVE_ESITO, None)
+    st.session_state.setdefault(CHIAVE_ACCESSO, None)
+    st.session_state.setdefault(CHIAVE_ONBOARDING, None)
 
 
 def scegli_apiario_iniziale(apiari: tuple[ApiarioScelta, ...]) -> None:
@@ -327,12 +334,73 @@ def prendi_esito() -> str | None:
 
 
 # --------------------------------------------------------------------------- #
+# Accesso e onboarding (M6-T11)
+# --------------------------------------------------------------------------- #
+
+
+def accesso_effettuato() -> bool:
+    return st.session_state[CHIAVE_ACCESSO] is not None
+
+
+def nome_in_accesso() -> str | None:
+    return st.session_state[CHIAVE_ACCESSO]
+
+
+def passo_onboarding() -> int | None:
+    return st.session_state[CHIAVE_ONBOARDING]
+
+
+def entra(utente: UtenteAutenticato, *, nuovo: bool = False) -> None:
+    """L'accesso è riuscito: da qui le pagine sono sue. Un utente nuovo parte dall'onboarding.
+
+    Riesegue l'app, così il router (`Home.py`) ricostruisce il menu: va chiamata per ultima.
+    """
+    st.session_state[CHIAVE_UTENTE] = utente.id
+    st.session_state[CHIAVE_ACCESSO] = utente.nome
+    st.session_state[CHIAVE_APIARIO_ATTIVO] = None  # quello dell'utente di prima non è suo
+    st.session_state[CHIAVE_ONBOARDING] = 1 if nuovo else None
+    st.session_state[CHIAVE_ESITO] = None
+    logger.info("Accesso nella sessione dell'utente %s", utente.id)
+    st.rerun()
+
+
+def avanza_onboarding() -> None:
+    """Il passo dopo dei primi passi; dopo l'ultimo, l'onboarding finisce."""
+    passo = (st.session_state[CHIAVE_ONBOARDING] or 0) + 1
+    st.session_state[CHIAVE_ONBOARDING] = passo if passo <= PASSI_ONBOARDING else None
+    st.rerun()
+
+
+def termina_onboarding() -> None:
+    """Fine dei primi passi (anche saltati): il router mostra l'app."""
+    st.session_state[CHIAVE_ONBOARDING] = None
+    st.rerun()
+
+
+def esci() -> None:
+    """Callback del bottone «Esci»: la sessione torna a prima dell'accesso.
+
+    È un callback (`on_click`): Streamlit riesegue l'app da sé, e il router mostra Accedi.
+    """
+    st.session_state[CHIAVE_UTENTE] = None
+    st.session_state[CHIAVE_ACCESSO] = None
+    st.session_state[CHIAVE_APIARIO_ATTIVO] = None
+    st.session_state[CHIAVE_ONBOARDING] = None
+    st.session_state[CHIAVE_ESITO] = None
+
+
+# --------------------------------------------------------------------------- #
 # Prima riga di ogni pagina
 # --------------------------------------------------------------------------- #
 
 
-def avvia(titolo: str, icona: str = "🐝") -> Servizi:
+def avvia(titolo: str, icona: str = "🐝", *, pubblica: bool = False) -> Servizi:
     """Prepara la pagina: configurazione, stato, servizi. Va chiamata per prima in ogni pagina.
+
+    Una pagina non `pubblica` senza accesso si ferma qui (M6-T11). Il router (`Home.py`) già
+    non la mette nel menu: questo è il secondo lucchetto, se un giorno ci si arrivasse lo stesso
+    (la cartella `pages/` è anche registrata in automatico da Streamlit). Pubblici sono solo il
+    router, Accedi e Registrati.
 
     `st.set_page_config` dev'essere il primo comando Streamlit di uno script, quindi sta qui e non
     nella pagina. Se la configurazione non è valida l'errore si mostra e la pagina si ferma: è
@@ -340,6 +408,9 @@ def avvia(titolo: str, icona: str = "🐝") -> Servizi:
     """
     st.set_page_config(page_title=f"{titolo} · BeeWatch AI", page_icon=icona, layout="wide")
     inizializza_stato()
+    if not pubblica and not accesso_effettuato():
+        st.info("Per vedere questa pagina accedi a BeeWatch AI.", icon="🔑")
+        st.stop()
     try:
         return servizi()
     except BeeWatchError as errore:

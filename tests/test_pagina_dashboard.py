@@ -20,7 +20,7 @@ from anagrafica_finta import (
     anagrafica_di_prova,
     raccolti_di_prova,
 )
-from app_finta import APP, DashboardFinto, installa, valori
+from app_finta import APP, DashboardFinto, con_accesso, installa, valori
 from previsione_finta import PredittoreFinto, ProduzioneFinta
 from streamlit.testing.v1 import AppTest
 
@@ -55,7 +55,7 @@ def pronta(app_pronta, monkeypatch) -> None:
 
 
 def apri() -> AppTest:
-    return AppTest.from_file(str(PAGINA), default_timeout=30).run()
+    return con_accesso(AppTest.from_file(str(PAGINA), default_timeout=30)).run()
 
 
 def metriche(at: AppTest) -> dict[str, str]:

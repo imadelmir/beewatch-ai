@@ -18,7 +18,7 @@ from anagrafica_finta import (
     anagrafica_di_prova,
     ispezioni_di_prova,
 )
-from app_finta import APP, DashboardFinto, installa, valori
+from app_finta import APP, DashboardFinto, con_accesso, installa, valori
 from assistente_finto import (
     RISPOSTA_CON_MARKDOWN,
     RISPOSTA_SENZA_ELENCHI,
@@ -75,7 +75,7 @@ def ambiente(app_pronta, monkeypatch) -> Ambiente:
 
 
 def apri() -> AppTest:
-    return AppTest.from_file(str(PAGINA), default_timeout=30).run()
+    return con_accesso(AppTest.from_file(str(PAGINA), default_timeout=30)).run()
 
 
 def selettore(at: AppTest):
@@ -282,7 +282,7 @@ def test_senza_apiari_invita_a_crearne_uno(app_pronta, monkeypatch):
 
     assert not at.exception and not at.error
     assert any(t.startswith("Nessun apiario registrato.") for t in valori(at.info))
-    assert not at.button
+    assert not at.main.button
 
 
 def test_senza_ispezioni_con_note_rimanda_a_ispezioni(app_pronta, monkeypatch):
@@ -294,7 +294,7 @@ def test_senza_ispezioni_con_note_rimanda_a_ispezioni(app_pronta, monkeypatch):
 
     [vuoto] = [t for t in valori(at.info) if t.startswith("Nessuna ispezione con note in Collina.")]
     assert "Ispezioni" in vuoto
-    assert not at.button
+    assert not at.main.button
 
 
 def test_con_il_database_spento_lo_dice_e_si_ferma(app_pronta, monkeypatch):
@@ -307,7 +307,7 @@ def test_con_il_database_spento_lo_dice_e_si_ferma(app_pronta, monkeypatch):
     assert not at.exception
     [errore] = valori(at.error)
     assert errore.startswith("**Non riesco a raggiungere il database.**")
-    assert not at.button
+    assert not at.main.button
 
 
 def test_se_lo_storico_non_si_legge_si_puo_generare_lo_stesso(ambiente):

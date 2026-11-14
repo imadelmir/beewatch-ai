@@ -255,6 +255,11 @@ def sidebar() -> ApiarioScelta | None:
         st.caption(
             "**Database:** connesso" if database_raggiunto else "**Database:** non raggiungibile"
         )
+
+        # M6-T11: chi c'è, e come si esce. Le pagine con la sidebar si vedono solo dopo l'accesso.
+        st.divider()
+        st.caption(f"**Accesso:** {avvio.nome_in_accesso()}")
+        st.button("Esci", key="esci", on_click=avvio.esci, icon="🚪")
     return attivo
 
 

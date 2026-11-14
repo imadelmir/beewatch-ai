@@ -39,6 +39,8 @@ campione (M6-T7).
 
 L'applicazione conserva i dati che scrivi tu: il nome e l'indirizzo email del profilo, gli apiari con la località e, se le inserisci, le coordinate, gli alveari, le ispezioni con le note di campo, i raccolti, le stime di produzione e i riepiloghi scritti dall'assistente.
 
+La password non si salva: si salva solo un'impronta cifrata (hash), da cui non si può risalire alla password. Chi entra vede solo i propri apiari e i propri dati.
+
 Tutto sta in un database MySQL sul computer dove gira l'applicazione, dentro un contenitore Docker. Nessun dato viene copiato su un servizio esterno, con una sola eccezione possibile: le note di un'ispezione, quando chiedi un riepilogo e l'assistente usa un servizio esterno (vedi sotto).
 
 Le coordinate e la località degli apiari non vengono mai inviate all'assistente: per riassumere le note non servono. I file di registro (log) annotano che cosa è successo, ma non contengono il testo delle note.
@@ -49,6 +51,9 @@ GDPR, il regolamento europeo sulla protezione dei dati. Art. 5: si raccolgono so
 
 **Nel progetto.**
 
+- *Password e accesso (M6-T11):* solo l'hash bcrypt in `utenti.hash_password` (`beewatch/sicurezza.py`);
+  email sconosciuta e password sbagliata danno lo stesso messaggio; ogni pagina dell'app richiede
+  l'accesso, e ogni servizio filtra per `utente_id`.
 - *Dove stanno i dati:* il database MySQL del `docker-compose.yml`, con un volume locale; nessuna
   tabella viene sincronizzata altrove. Lo schema è in `sql/schema.sql`.
 - *Geolocalizzazione:* `apiari.latitudine` e `apiari.longitudine` sono facoltative e marcate nello

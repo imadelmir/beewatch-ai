@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 
+from beewatch.exceptions import ValidationError
 from beewatch.models import Previsione
 from beewatch.repositories import (
     _ALVEARE_DELL_UTENTE,
@@ -26,6 +27,7 @@ from beewatch.repositories import (
     _non_trovato,
     _Repository,
     _richiedi,
+    _vieta,
 )
 
 
@@ -47,6 +49,25 @@ class DashboardRepository(_Repository):
 
 
 class UtentiRepository(_Repository):
+    def crea(self, email: str, nome_completo: str, hash_password: str) -> int:
+        """M6-T11 · un utente nuovo; l'email (già in minuscolo) dev'essere libera."""
+        with self._db.transazione() as cursore:
+            occupata = ValidationError("Esiste già un account con questa email.", campo="email")
+            _vieta(cursore, "SELECT 1 FROM utenti WHERE email = %s", (email,), occupata)
+            cursore.execute(
+                "INSERT INTO utenti (email, nome_completo, hash_password) VALUES (%s, %s, %s)",
+                (email, nome_completo, hash_password),
+            )
+            return cursore.lastrowid
+
+    def trova_per_email(self, email: str) -> Riga | None:
+        """M6-T11 · l'utente di un'email, con l'hash per verificare la password."""
+        righe = self._righe(
+            "SELECT id, email, nome_completo, hash_password, attivo FROM utenti WHERE email = %s",
+            (email,),
+        )
+        return righe[0] if righe else None
+
     def elimina(self, utente_id: int) -> None:
         """Q11 · cancellazione GDPR (art. 17): le cascate dello schema portano via tutto."""
         with self._db.transazione() as cursore:

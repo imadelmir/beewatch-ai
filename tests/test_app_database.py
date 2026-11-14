@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 import streamlit as st
+from app_finta import con_accesso
 from streamlit.testing.v1 import AppTest
 
 from beewatch.database import Database
@@ -46,7 +47,7 @@ def home_con_database(monkeypatch: pytest.MonkeyPatch, database_test: Database):
 
 
 def test_la_home_legge_il_seed_dal_database_vero(home_con_database) -> None:
-    at = AppTest.from_file(str(APP / "Home.py"), default_timeout=60).run()
+    at = con_accesso(AppTest.from_file(str(APP / "Home.py"), default_timeout=60)).run()
 
     assert not at.exception
     numeri = {m.label: m.value for m in at.metric}
@@ -66,7 +67,7 @@ def test_le_sei_pagine_partono_con_il_database_vero(home_con_database) -> None:
     collegamento alla pagina Alveari: aperta da sola, AppTest non conosce le altre pagine.
     """
     for pagina in sorted((APP / "pages").glob("*.py")):
-        at = AppTest.from_file(str(APP / "Home.py"), default_timeout=60).run()
+        at = con_accesso(AppTest.from_file(str(APP / "Home.py"), default_timeout=60)).run()
         at.switch_page(str(pagina.relative_to(APP))).run()
         assert not at.exception, pagina.name
         assert not at.error, pagina.name
@@ -86,7 +87,7 @@ def test_con_un_utente_senza_dati_ogni_pagina_resta_usabile(
         utente = cursore.lastrowid
     try:
         for pagina in [APP / "Home.py", *sorted((APP / "pages").glob("*.py"))]:
-            at = AppTest.from_file(str(APP / "Home.py"), default_timeout=60)
+            at = con_accesso(AppTest.from_file(str(APP / "Home.py"), default_timeout=60))
             at.session_state["utente_id"] = utente  # `inizializza_stato` non lo sovrascrive
             at.run()
             if pagina.name != "Home.py":

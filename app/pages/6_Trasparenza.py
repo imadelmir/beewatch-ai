@@ -40,6 +40,8 @@ SEZIONI: tuple[tuple[str, tuple[str, ...]], ...] = (
             "profilo, gli apiari con la località e, se le inserisci, le coordinate, gli alveari, "
             "le ispezioni con le note di campo, i raccolti, le stime di produzione e i riepiloghi "
             "scritti dall'assistente.",
+            "La password non si salva: si salva solo un'impronta cifrata (hash), da cui non si "
+            "può risalire alla password. Chi entra vede solo i propri apiari e i propri dati.",
             "Tutto sta in un database MySQL sul computer dove gira l'applicazione, dentro un "
             "contenitore Docker. Nessun dato viene copiato su un servizio esterno, con una sola "
             "eccezione possibile: le note di un'ispezione, quando chiedi un riepilogo e "

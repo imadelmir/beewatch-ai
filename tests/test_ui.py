@@ -53,8 +53,9 @@ from beewatch.models import LivelloRischio, StatoAlveare
 
 SPEC = RADICE / "docs" / "markdown" / "M6-interfaccia" / "ui_spec.md"
 UI = APP / "ui.py"
-HOME = APP / "Home.py"
-SCHERMATE = [HOME, *PAGINE]  # la Home e le sei pagine
+HOME = APP / "Home.py"  # il router (M6-T11): con l'accesso fatto apre la Home
+CONTENUTO_HOME = APP / "schermate" / "home.py"  # il codice della Home
+SCHERMATE = [CONTENUTO_HOME, *PAGINE]  # la Home e le sei pagine
 # Le pagine che leggono il database (le altre leggono solo il modello di previsione).
 COL_DATABASE = {p.name for p in PAGINE} - {"3_Previsione.py", "6_Trasparenza.py"}
 
@@ -617,8 +618,10 @@ def test_la_sidebar_ha_identita_apiario_attivo_e_stato_del_sistema(app_pronta, m
         "**Modello:** v-stub (RandomForestRegressor)",
         "**Assistente AI:** llama3.1:8b via ollama (chiave: non richiesta)",
         "**Database:** connesso",
+        "**Accesso:** Apicoltore Dimostrativo",  # M6-T11
     ]
-    assert len(at.sidebar.divider) == 1
+    assert len(at.sidebar.divider) == 2
+    assert [b.label for b in at.sidebar.button] == ["Esci"]
 
 
 def test_la_sidebar_e_identica_su_tutte_le_schermate(app_pronta, monkeypatch):

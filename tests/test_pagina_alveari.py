@@ -13,7 +13,7 @@ from datetime import date
 
 import pytest
 from anagrafica_finta import DATABASE_SPENTO, anagrafica_di_prova
-from app_finta import APP, DashboardFinto, PredittoreStub, installa, valori
+from app_finta import APP, DashboardFinto, PredittoreStub, con_accesso, installa, valori
 from streamlit.testing.v1 import AppTest
 
 from beewatch.models import StatoAlveare
@@ -44,7 +44,7 @@ def anagrafica(app_pronta, monkeypatch):
 
 
 def apri() -> AppTest:
-    return AppTest.from_file(str(PAGINA), default_timeout=30).run()
+    return con_accesso(AppTest.from_file(str(PAGINA), default_timeout=30)).run()
 
 
 def tutto_il_testo(at: AppTest) -> str:
@@ -238,7 +238,7 @@ def test_eliminare_chiede_una_conferma_esplicita(anagrafica):
     assert alveari.righe[2].attivo
 
     at.checkbox(key="alveare_2_conferma").check().run()
-    assert not at.button(key="alveare_2_elimina").disabled
+    assert not at.main.button(key="alveare_2_elimina").disabled
     at = premi(at, "alveare_2_elimina")
 
     assert not at.exception

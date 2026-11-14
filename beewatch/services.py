@@ -25,6 +25,7 @@ tentativo dopo riprova.
 from __future__ import annotations
 
 import math
+import re
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -79,6 +80,14 @@ from beewatch.repositories_riferimento import (
     PrevisioniRepository,
     ProduzioneUsdaRepository,
     RiepiloghiRepository,
+    UtentiRepository,
+)
+from beewatch.sicurezza import (
+    BYTE_MASSIMI_PASSWORD,
+    CARATTERI_MINIMI_PASSWORD,
+    calcola_hash,
+    problema_password,
+    verifica,
 )
 
 logger = ottieni_logger(__name__)
@@ -261,6 +270,26 @@ class MetricheModello:
     migliore_baseline_mae_kg: float
 
 
+EMAIL_DIMOSTRATIVA = "demo@beewatch.local"  # l'utente del seed (DA-02)
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+NOME_MASSIMO = 120  # utenti.nome_completo VARCHAR(120)
+EMAIL_MASSIMA = 255
+ACCESSO_NEGATO = "Email o password non corretti."
+REGOLE_PASSWORD = (
+    f"Almeno {CARATTERI_MINIMI_PASSWORD} caratteri e al massimo {BYTE_MASSIMI_PASSWORD} byte, "
+    "senza spazi all'inizio o alla fine."
+)  # lo stesso per email ignota e password errata
+
+
+@dataclass(frozen=True)
+class UtenteAutenticato:
+    """Chi ha fatto l'accesso: niente hash, niente password."""
+
+    id: int
+    nome: str
+    email: str
+
+
 @dataclass(frozen=True)
 class RiepilogoSalvato:
     """Un riepilogo già salvato di un'ispezione, con il modello e il prompt che l'hanno scritto."""
@@ -326,6 +355,16 @@ def _parametro(valore: Any, intervallo: IntervalloParametro) -> float:
     return numero
 
 
+def _email(valore: Any) -> str:
+    """Un'email in minuscolo, senza spazi attorno, con la forma minima «nome@dominio.tld»."""
+    email = valore.strip().lower() if isinstance(valore, str) else ""
+    if not _EMAIL.match(email) or len(email) > EMAIL_MASSIMA:
+        raise ValidationError(
+            "Scrivi un indirizzo email valido, come nome@dominio.it.", campo="email"
+        )
+    return email
+
+
 def _in_elenco(ispezione: Ispezione, codice_alveare: str) -> IspezioneInElenco:
     peso = ispezione.peso_kg
     return IspezioneInElenco(
@@ -355,6 +394,7 @@ class Servizi:
         raccolti: RaccoltiRepository | None = None,
         riepiloghi: RiepiloghiRepository | None = None,
         dashboard: DashboardRepository | None = None,
+        utenti: UtentiRepository | None = None,
         descrizione_llm: str = "non configurato",
         timeout_llm: int = 60,
         llm_in_locale: bool | None = None,
@@ -374,6 +414,7 @@ class Servizi:
         self._raccolti = raccolti or RaccoltiRepository(database)
         self._riepiloghi = riepiloghi or RiepiloghiRepository(database)
         self._dashboard = dashboard or DashboardRepository(database)
+        self._utenti = utenti or UtentiRepository(database)
         self.descrizione_llm = descrizione_llm  # «modello via provider (chiave: …)», senza segreti
         self._timeout_llm = timeout_llm
         self._llm_in_locale = llm_in_locale
@@ -408,6 +449,78 @@ class Servizi:
                     raise ConfigError("L'assistente AI non è configurato per questi servizi.")
                 self._assistente = AssistenteIspezioni(self._crea_llm())
             return self._assistente
+
+    # ----------------------------------------------------------------------- #
+    # Registrazione e accesso (M6-T11)
+    # ----------------------------------------------------------------------- #
+
+    def registra_utente(
+        self, *, nome: str, email: str, password: str, conferma: str
+    ) -> UtenteAutenticato:
+        """Crea un account e restituisce l'utente, già pronto per l'accesso.
+
+        La password si salva solo come hash bcrypt (`beewatch/sicurezza.py`); l'email si salva in
+        minuscolo, così «Mario@x.it» e «mario@x.it» sono lo stesso account.
+
+        Raises:
+            ValidationError: nome, email o password non validi, password diverse, email già usata.
+            DatabaseError: il database non risponde.
+        """
+        nome_pulito = (nome or "").strip()
+        if not 2 <= len(nome_pulito) <= NOME_MASSIMO:
+            raise ValidationError(
+                f"Scrivi nome e cognome (da 2 a {NOME_MASSIMO} caratteri).", campo="nome"
+            )
+        email_pulita = _email(email)
+        if (problema := problema_password(password or "")) is not None:
+            raise ValidationError(problema, campo="password")
+        if password != conferma:
+            raise ValidationError("Le due password non coincidono.", campo="conferma")
+        nuovo = self._utenti.crea(email_pulita, nome_pulito, calcola_hash(password))
+        logger.info("Utente %s registrato", nuovo)
+        return UtenteAutenticato(id=nuovo, nome=nome_pulito, email=email_pulita)
+
+    def accedi(self, email: str, password: str) -> UtenteAutenticato:
+        """L'utente di email e password, se corrispondono e l'account è attivo.
+
+        Email sconosciuta, password sbagliata e account disattivato danno **lo stesso** messaggio,
+        e la password si verifica sempre (anche contro un hash fittizio): né il testo né il tempo
+        di risposta dicono se un account esiste.
+
+        Raises:
+            ValidationError: credenziali non valide (campo «password»).
+            DatabaseError: il database non risponde.
+        """
+        try:
+            email_pulita = _email(email)
+        except ValidationError:
+            email_pulita = None
+        riga = self._utenti.trova_per_email(email_pulita) if email_pulita else None
+        valida = verifica(password or "", riga["hash_password"] if riga else None)
+        if not (riga and valida and riga["attivo"]):
+            logger.info("Accesso negato")  # senza email: il log non diventa un elenco di account
+            raise ValidationError(ACCESSO_NEGATO, campo="password")
+        logger.info("Accesso dell'utente %s", riga["id"])
+        return UtenteAutenticato(
+            id=int(riga["id"]), nome=riga["nome_completo"], email=riga["email"]
+        )
+
+    def accesso_dimostrativo(self) -> UtenteAutenticato:
+        """L'utente dimostrativo del seed (DA-02), senza password: è pubblico per definizione.
+
+        Raises:
+            ValidationError: l'utente dimostrativo non c'è (seed non caricato) o è disattivato.
+            DatabaseError: il database non risponde.
+        """
+        riga = self._utenti.trova_per_email(EMAIL_DIMOSTRATIVA)
+        if not (riga and riga["attivo"]):
+            raise ValidationError(
+                "L'utente dimostrativo non c'è: carica i dati di prova (`sql/seed.sql`).",
+                campo="email",
+            )
+        return UtenteAutenticato(
+            id=int(riga["id"]), nome=riga["nome_completo"], email=riga["email"]
+        )
 
     # ----------------------------------------------------------------------- #
     # Panoramica e stato del sistema (Home)
