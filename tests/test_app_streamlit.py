@@ -58,12 +58,12 @@ def test_la_home_mostra_la_panoramica(app_pronta, monkeypatch):
     at = esegui(APP / "Home.py")
 
     assert not at.exception
-    assert valori(at.title) == ["🐝 BeeWatch AI"]
+    assert valori(at.title) == ["Dashboard"]
     assert {m.label: m.value for m in at.metric} == {
         "Alveari attivi": "4",
         "Ispezioni (30 giorni)": "7",
         "Produzione stagione": "1 234,5 kg",
-        "Da controllare": "2",
+        "Stato generale": "Attenzione",  # 2 da controllare (mockup: «Stato generale»)
     }
     didascalie = " ".join(valori(at.caption))
     assert "Apiario attivo: **Collina** · 2 in tutto" in didascalie

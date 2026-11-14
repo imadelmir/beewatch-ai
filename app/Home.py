@@ -39,12 +39,12 @@ elif passo_onboarding() is not None:
     ]
 else:
     pagine = [
-        st.Page("schermate/home.py", title="Home", icon=":material/home:", default=True),
+        st.Page("schermate/home.py", title="Dashboard", icon=":material/home:", default=True),
         st.Page("pages/1_Alveari.py", title="Alveari", icon=":material/hive:"),
         st.Page("pages/2_Ispezioni.py", title="Ispezioni", icon=":material/assignment_turned_in:"),
         st.Page("pages/3_Previsione.py", title="Previsioni", icon=":material/show_chart:"),
         st.Page("pages/4_Assistente_AI.py", title="AI Assistant", icon=":material/smart_toy:"),
-        st.Page("pages/5_Dashboard.py", title="Dashboard", icon=":material/dashboard:"),
+        st.Page("pages/5_Dashboard.py", title="Statistiche", icon=":material/bar_chart:"),
         st.Page("pages/6_Trasparenza.py", title="Trasparenza", icon=":material/visibility:"),
         st.Page("pages/7_Report.py", title="Report", icon=":material/description:"),
         st.Page("pages/8_Impostazioni.py", title="Impostazioni", icon=":material/settings:"),

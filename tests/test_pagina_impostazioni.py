@@ -210,12 +210,11 @@ def test_con_il_database_spento_lo_dice_e_si_ferma(ambiente):
 def test_la_home_mostra_i_promemoria(ambiente):
     at = apri(APP / "schermate" / "home.py")
 
-    assert "Promemoria" in valori(at.subheader)
-    testo = " ".join(valori(at.markdown))
-    assert (
-        "Da ricontrollare (nessuna ispezione da oltre 30 giorni): **A2** (mai ispezionato)."
-        in testo
-    )
+    notifiche = " ".join(e.proto.body for e in at.get("html"))
+    assert "Ultime notifiche" in notifiche and "Prossime scadenze" in notifiche
+    assert "L&#x27;alveare A2 va ricontrollato (mai ispezionato)." in notifiche
+    assert "Ispezione alveare A2" in notifiche and "da fare" in notifiche
+    assert "(un&#x27;ispezione ogni 30 giorni)" in notifiche
 
 
 def test_senza_consenso_lassistente_esterno_non_propone_il_bottone(app_pronta, monkeypatch):

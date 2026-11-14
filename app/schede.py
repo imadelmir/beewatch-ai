@@ -1,0 +1,237 @@
+"""Le card del mockup ad alta fedeltà, condivise dalle pagine (testata, KPI, elenchi, ciambella).
+
+Accanto a `ui.py`, che ha il catalogo del §8 della specifica: qui ci sono i pezzi che il mockup
+ripete in più schermate. Come in `ui.py`, l'HTML usa solo testi fissi o passati da
+`html.escape`, e i colori vengono dal tema attivo (`tema.PALETTE`).
+"""
+
+from __future__ import annotations
+
+import base64
+import html
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from datetime import date
+from typing import Any
+
+import plotly.graph_objects as go
+import streamlit as st
+import tema
+from streamlit.delta_generator import DeltaGenerator
+from ui import formatta_numero, stile_figura
+
+from beewatch.services import MESI
+
+# --------------------------------------------------------------------------- #
+# Testata della pagina
+# --------------------------------------------------------------------------- #
+
+
+def testata(titolo: str, descrizione: str) -> DeltaGenerator:
+    """Titolo e sottotitolo a sinistra, come nel mockup; restituisce la colonna di destra, dove la
+    pagina mette le sue azioni (la data, «Nuova ispezione»…)."""
+    sinistra, destra = st.columns([3, 2], vertical_alignment="center")
+    with sinistra, st.container(key="bw_testata"):
+        st.title(titolo)
+        st.caption(descrizione)
+    return destra
+
+
+def data_estesa(giorno: date) -> str:
+    """«14 novembre 2026»."""
+    return f"{giorno.day} {MESI[giorno.month - 1]} {giorno.year}"
+
+
+def pillola_data(giorno: date) -> None:
+    """La data di oggi nel riquadro con il calendario, in cima alla Dashboard."""
+    icona = immagine_icona("calendario", 18)
+    st.html(f'<div class="bw-pillola-data"><span>{data_estesa(giorno)}</span>{icona}</div>')
+
+
+def immagine_icona(nome: str, misura: int = 20, colore: str | None = None) -> str:
+    """Un'icona del mockup come `<img>` (Streamlit toglie gli `<svg>` scritti nell'HTML)."""
+    tinta = colore or tema.PALETTE[tema.tema_attivo()]["accento"]
+    svg = tema.icona_svg(nome, tinta, misura).replace("'", '"')
+    dati = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+    return f'<img src="data:image/svg+xml;base64,{dati}" width="{misura}" height="{misura}" alt="">'
+
+
+# --------------------------------------------------------------------------- #
+# Card dei numeri (KPI)
+# --------------------------------------------------------------------------- #
+
+
+def scheda_kpi(
+    icona: str,
+    etichetta: str,
+    valore: Any,
+    unita: str | None,
+    *,
+    nota: str | None = None,
+    variazione: str | None = None,
+    aiuto: str | None = None,
+    evidenzia: bool = False,
+) -> None:
+    """Una card del mockup: etichetta, icona in alto a destra, numero grande, una riga sotto.
+
+    È un `st.metric` vero (si legge anche senza lo stile): `variazione` è la parte verde
+    («+2»), `nota` il resto («questo mese»). Con `evidenzia` il valore è nel giallo del tema
+    (lo «Stato generale» del mockup).
+    """
+    testo = valore if isinstance(valore, str) else formatta_numero(valore)
+    if unita and testo != "—":
+        testo = f"{testo} {unita}"
+    chiave = f"bw_kpi_{icona}" + ("_evidenza" if evidenzia else "")
+    with st.container(key=chiave):
+        st.metric(
+            etichetta,
+            testo,
+            delta=variazione or nota,
+            delta_color="normal" if variazione else "off",
+            delta_arrow="off",
+            delta_description=nota if variazione else None,
+            help=aiuto,
+            border=True,
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Elenchi dentro le card (notifiche, scadenze)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class Voce:
+    """Una riga di un elenco: icona (o nessuna), testo, e a destra la data o il tempo."""
+
+    testo: str
+    destra: str = ""
+    icona: str | None = None
+    tono: str = "accento"  # accento, attenzione, critico, successo
+
+
+def elenco(voci: Sequence[Voce], vuoto: str) -> None:
+    """Le righe di «Ultime notifiche» e «Prossime scadenze»; senza voci, una frase."""
+    if not voci:
+        st.caption(vuoto)
+        return
+    colori = tema.PALETTE[tema.tema_attivo()]
+    righe = []
+    for voce in voci:
+        icona = immagine_icona(voce.icona, 20, colori[voce.tono]) if voce.icona else ""
+        righe.append(
+            f'<li>{icona}<span class="bw-voce-testo">{html.escape(voce.testo)}</span>'
+            f'<span class="bw-voce-destra">{html.escape(voce.destra)}</span></li>'
+        )
+    classe = "bw-elenco con-icone" if any(v.icona for v in voci) else "bw-elenco"
+    st.html(f'<ul class="{classe}">{"".join(righe)}</ul>')
+
+
+def titolo_card(titolo: str, dettaglio: str | None = None) -> None:
+    """Il titolo in grassetto di una card, con la nota grigia accanto («(per anno)»)."""
+    extra = (
+        f' <span class="bw-titolo-card-nota">{html.escape(dettaglio)}</span>' if dettaglio else ""
+    )
+    st.html(f'<div class="bw-titolo-card">{html.escape(titolo)}{extra}</div>')
+
+
+# --------------------------------------------------------------------------- #
+# Grafici del mockup
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class Fetta:
+    etichetta: str
+    numero: int
+    tono: str  # accento, attenzione, testo2…
+
+
+def figura_ciambella(fette: Iterable[Fetta], totale: int) -> go.Figure:
+    """La ciambella «Stato alveari»: il totale al centro, le fette nei colori del tema."""
+    fette = [f for f in fette if f.numero > 0]
+    colori = tema.PALETTE[tema.tema_attivo()]
+    figura = go.Figure(
+        go.Pie(
+            labels=[f.etichetta for f in fette],
+            values=[f.numero for f in fette],
+            hole=0.68,
+            sort=False,
+            direction="clockwise",
+            marker={"colors": [colori[f.tono] for f in fette]},
+            textinfo="none",
+            hovertemplate="%{label}: %{value}<extra></extra>",
+        )
+    )
+    figura.update_layout(
+        showlegend=False,
+        height=230,
+        annotations=[
+            {
+                "text": f"<b>{totale}</b>",
+                "x": 0.5,
+                "y": 0.56,
+                "showarrow": False,
+                "font": {"size": 36, "color": colori["testo"]},
+            },
+            {
+                "text": "Totale",
+                "x": 0.5,
+                "y": 0.38,
+                "showarrow": False,
+                "font": {"size": 13, "color": colori["testo2"]},
+            },
+        ],  # fmt: skip
+        **{**stile_figura(), "margin": {"l": 0, "r": 0, "t": 0, "b": 0}},
+    )
+    return figura
+
+
+def _percento(parte: int, totale: int) -> str:
+    return f"{round(100 * parte / totale) if totale else 0}%"
+
+
+def legenda_ciambella(fette: Sequence[Fetta], totale: int) -> None:
+    """La legenda a destra della ciambella: pallino, nome, numero e percentuale."""
+    colori = tema.PALETTE[tema.tema_attivo()]
+    righe = "".join(
+        f'<li><span class="bw-pallino" style="background:{colori[f.tono]}"></span>'
+        f"<span>{html.escape(f.etichetta)}</span>"
+        f'<span class="bw-voce-destra">{f.numero} ({_percento(f.numero, totale)})</span></li>'
+        for f in fette
+    )
+    st.html(f'<ul class="bw-legenda">{righe}</ul>')
+
+
+def figura_area(x: Sequence[Any], y: Sequence[float], etichetta_y: str) -> go.Figure:
+    """La linea gialla con l'area sfumata sotto (mockup, «Produzione»)."""
+    colori = tema.PALETTE[tema.tema_attivo()]
+    figura = go.Figure(
+        go.Scatter(
+            x=list(x),
+            y=list(y),
+            mode="lines+markers",
+            line={"color": colori["accento"], "width": 3, "shape": "spline", "smoothing": 0.6},
+            marker={"color": colori["accento"], "size": 8},
+            fill="tozeroy",
+            fillgradient={
+                "type": "vertical",
+                "colorscale": [[0, "rgba(245, 179, 1, 0)"], [1, "rgba(245, 179, 1, 0.35)"]],
+            },
+            hovertemplate="%{x}: %{y:.1f} kg<extra></extra>",
+        )
+    )
+    figura.update_layout(
+        height=260,
+        xaxis={"type": "category", "showgrid": False, "title": ""},
+        yaxis={"title": etichetta_y, "gridcolor": colori["bordo"], "rangemode": "tozero"},
+        **{**stile_figura(), "margin": {"l": 10, "r": 10, "t": 10, "b": 10}},
+    )
+    return figura
+
+
+def disegna(figura: go.Figure, chiave: str) -> None:
+    """Una figura a tutta larghezza della card, senza la barra degli strumenti di Plotly."""
+    st.plotly_chart(
+        figura, width="stretch", theme=None, key=chiave, config={"displayModeBar": False}
+    )

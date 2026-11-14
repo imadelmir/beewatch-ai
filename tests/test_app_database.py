@@ -53,7 +53,8 @@ def test_la_home_legge_il_seed_dal_database_vero(home_con_database) -> None:
     numeri = {m.label: m.value for m in at.metric}
     assert numeri["Alveari attivi"] == "4"  # i quattro alveari del seed
     assert numeri["Produzione stagione"].endswith(" kg")
-    assert int(numeri["Ispezioni (30 giorni)"]) >= 0 and int(numeri["Da controllare"]) <= 4
+    assert int(numeri["Ispezioni (30 giorni)"]) >= 0
+    assert numeri["Stato generale"] in ("Buono", "Attenzione", "Critico")  # Dashboard del mockup
     assert at.session_state["utente_id"] == 1
     assert at.session_state["apiario_attivo_id"] is not None  # l'apiario del seed
     assert any("Apiario attivo:" in str(c.value) for c in at.caption)
