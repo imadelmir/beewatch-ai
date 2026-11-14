@@ -42,6 +42,7 @@ FATTE = {
     "5_Dashboard.py",
     "6_Trasparenza.py",
     "7_Report.py",
+    "8_Impostazioni.py",
 }
 IN_COSTRUZIONE = {p.name for p in PAGINE} - FATTE
 

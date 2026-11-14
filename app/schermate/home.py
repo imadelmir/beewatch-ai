@@ -10,11 +10,12 @@ cache) e li disegna con gli helper di `ui.py`.
 from __future__ import annotations
 
 import streamlit as st
-from avvio import CHIAVE_UTENTE, TTL_LETTURE_SECONDI, avvia, modello, panoramica
+from avvio import CHIAVE_UTENTE, TTL_LETTURE_SECONDI, avvia, modello, panoramica, promemoria
 from ui import (
     AZIONE_NESSUN_APIARIO,
     NESSUN_APIARIO,
     blocco_vuoto,
+    formatta_data,
     intestazione,
     metrica,
     mostra_errore,
@@ -58,6 +59,34 @@ with colonne[3]:
         aiuto="Attivi e mai ispezionati, o non ispezionati da oltre 30 giorni.",
     )
 st.caption(f"Dati aggiornati al massimo {TTL_LETTURE_SECONDI} secondi fa.")
+
+# M6-T13: i promemoria, con la soglia e gli avvisi scelti in Impostazioni.
+st.subheader("Promemoria")
+try:
+    avvisi = promemoria(st.session_state[CHIAVE_UTENTE])
+except BeeWatchError as errore:
+    mostra_errore(errore)
+else:
+    if avvisi.da_controllare:
+        elenco = ", ".join(
+            f"**{codice}** ({formatta_data(ultima) if ultima else 'mai ispezionato'})"
+            for codice, ultima in avvisi.da_controllare
+        )
+        st.markdown(
+            f"Da ricontrollare (nessuna ispezione da oltre {avvisi.giorni} giorni): {elenco}."
+        )
+    if avvisi.a_rischio:
+        st.markdown(
+            "Ispezioni recenti con rischio medio o alto: "
+            + ", ".join(
+                f"**{codice}** il {formatta_data(giorno)} ({rischio.lower()})"
+                for codice, giorno, rischio in avvisi.a_rischio
+            )
+            + "."
+        )
+    if not avvisi.da_controllare and not avvisi.a_rischio:
+        st.caption("Nessun promemoria: tutti gli alveari sono stati visti di recente.")
+    st.caption("Soglia e avvisi si scelgono in **Impostazioni**, scheda Notifiche.")
 
 st.divider()
 

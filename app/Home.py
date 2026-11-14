@@ -43,6 +43,7 @@ else:
         st.Page("pages/5_Dashboard.py", title="Dashboard", icon="📊"),
         st.Page("pages/6_Trasparenza.py", title="Trasparenza", icon="🔍"),
         st.Page("pages/7_Report.py", title="Report", icon="📄"),
+        st.Page("pages/8_Impostazioni.py", title="Impostazioni", icon="⚙️"),
     ]
 
 st.navigation(pagine).run()

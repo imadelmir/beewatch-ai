@@ -30,7 +30,7 @@ import re
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -79,6 +79,7 @@ from beewatch.repositories import (
 from beewatch.repositories_riferimento import (
     DashboardRepository,
     ModelliRepository,
+    PreferenzeRepository,
     PrevisioniRepository,
     ProduzioneUsdaRepository,
     ReportRepository,
@@ -162,7 +163,7 @@ class Panoramica:
     alveari_attivi: int
     ispezioni_30_giorni: int
     produzione_stagione_kg: float
-    alveari_da_controllare: int  # attivi, mai ispezionati o non ispezionati da oltre 30 giorni
+    alveari_da_controllare: int  # attivi, mai ispezionati o non da oltre N giorni (preferenze)
 
 
 @dataclass(frozen=True)
@@ -311,6 +312,29 @@ ETICHETTE_RISCHIO = {
 }
 
 
+GIORNI_PROMEMORIA = (7, 90)  # come il CHECK di preferenze_utente
+GIORNI_AVVISI_RISCHIO = 60  # la finestra della query Q6
+
+
+@dataclass(frozen=True)
+class Preferenze:
+    """Le scelte della pagina Impostazioni; senza riga nel database valgono i predefiniti."""
+
+    giorni_promemoria: int = 30
+    avvisi_rischio: bool = True
+    assistente_esterno: bool = True
+
+
+@dataclass(frozen=True)
+class Promemoria:
+    """Cosa ricordare nella Home: alveari da rivedere e, se richiesto, ispezioni a rischio."""
+
+    giorni: int
+    da_controllare: tuple[tuple[str, date | None], ...]  # (codice, ultima ispezione o None)
+    a_rischio: tuple[tuple[str, date, str], ...]  # (codice, data, rischio), dalla più recente
+    avvisi_rischio: bool
+
+
 @dataclass(frozen=True)
 class VoceArchivio:
     """Un report nell'archivio, senza il contenuto."""
@@ -445,6 +469,8 @@ class Servizi:
         dashboard: DashboardRepository | None = None,
         utenti: UtentiRepository | None = None,
         report: ReportRepository | None = None,
+        preferenze: PreferenzeRepository | None = None,
+        configurazione: Config | None = None,
         descrizione_llm: str = "non configurato",
         timeout_llm: int = 60,
         llm_in_locale: bool | None = None,
@@ -466,6 +492,8 @@ class Servizi:
         self._dashboard = dashboard or DashboardRepository(database)
         self._utenti = utenti or UtentiRepository(database)
         self._report = report or ReportRepository(database)
+        self._preferenze = preferenze or PreferenzeRepository(database)
+        self._configurazione = configurazione  # per la scheda Database, senza segreti
         self.descrizione_llm = descrizione_llm  # «modello via provider (chiave: …)», senza segreti
         self._timeout_llm = timeout_llm
         self._llm_in_locale = llm_in_locale
@@ -574,6 +602,179 @@ class Servizi:
         )
 
     # ----------------------------------------------------------------------- #
+    # Impostazioni (M6-T13)
+    # ----------------------------------------------------------------------- #
+
+    def profilo(self, utente_id: int) -> UtenteAutenticato:
+        """Nome ed email dell'utente.
+
+        Raises:
+            ValidationError: utente inesistente.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        riga = self._utenti.trova(utente)
+        if riga is None:
+            raise ValidationError("Utente non trovato.", campo="utente_id")
+        return UtenteAutenticato(
+            id=int(riga["id"]), nome=riga["nome_completo"], email=riga["email"]
+        )
+
+    def aggiorna_profilo(self, utente_id: int, *, nome: str, email: str) -> UtenteAutenticato:
+        """Cambia nome ed email (in minuscolo, ancora unica).
+
+        Raises:
+            ValidationError: nome o email non validi, email già usata da un altro account.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        nome_pulito = (nome or "").strip()
+        if not 2 <= len(nome_pulito) <= NOME_MASSIMO:
+            raise ValidationError(
+                f"Scrivi nome e cognome (da 2 a {NOME_MASSIMO} caratteri).", campo="nome"
+            )
+        email_pulita = _email(email)
+        self._utenti.aggiorna_profilo(utente, nome_pulito, email_pulita)
+        logger.info("Profilo dell'utente %s aggiornato", utente)
+        return UtenteAutenticato(id=utente, nome=nome_pulito, email=email_pulita)
+
+    def cambia_password(self, utente_id: int, *, attuale: str, nuova: str, conferma: str) -> None:
+        """Cambia la password, solo conoscendo quella attuale.
+
+        Raises:
+            ValidationError: password attuale sbagliata, nuova non valida o diversa dalla conferma.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        self._verifica_password_attuale(utente, attuale)
+        if (problema := problema_password(nuova or "")) is not None:
+            raise ValidationError(problema, campo="nuova")
+        if nuova != conferma:
+            raise ValidationError("Le due password nuove non coincidono.", campo="conferma")
+        self._utenti.cambia_password(utente, calcola_hash(nuova))
+        logger.info("Password dell'utente %s cambiata", utente)
+
+    def elimina_account(self, utente_id: int, *, password: str) -> None:
+        """Cancella l'account e tutti i suoi dati (GDPR art. 17), confermando con la password.
+
+        Lo schema porta via a cascata apiari, alveari, ispezioni, raccolti, stime, riepiloghi,
+        report e preferenze. Non si torna indietro.
+
+        Raises:
+            ValidationError: password sbagliata.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        self._verifica_password_attuale(utente, password)
+        self._utenti.elimina(utente)
+        logger.info("Account %s cancellato su richiesta dell'utente", utente)
+
+    def _verifica_password_attuale(self, utente: int, password: str) -> None:
+        riga = self._utenti.trova(utente)
+        if not (riga and verifica(password or "", riga["hash_password"])):
+            raise ValidationError("La password attuale non è corretta.", campo="attuale")
+
+    def preferenze(self, utente_id: int) -> Preferenze:
+        """Le preferenze dell'utente, o i predefiniti se non le ha mai salvate."""
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        riga = self._preferenze.leggi(utente)
+        if riga is None:
+            return Preferenze()
+        return Preferenze(
+            giorni_promemoria=int(riga["giorni_promemoria"]),
+            avvisi_rischio=bool(riga["avvisi_rischio"]),
+            assistente_esterno=bool(riga["assistente_esterno"]),
+        )
+
+    def salva_preferenze(
+        self,
+        utente_id: int,
+        *,
+        giorni_promemoria: int,
+        avvisi_rischio: bool,
+        assistente_esterno: bool,
+    ) -> Preferenze:
+        """Salva le preferenze (sostituisce quelle di prima).
+
+        Raises:
+            ValidationError: giorni fuori da 7–90, valori non booleani.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        minimo, massimo = GIORNI_PROMEMORIA
+        valido = isinstance(giorni_promemoria, int) and not isinstance(giorni_promemoria, bool)
+        if not valido or not minimo <= giorni_promemoria <= massimo:
+            raise ValidationError(
+                f"I giorni del promemoria vanno da {minimo} a {massimo}.", campo="giorni_promemoria"
+            )
+        for valore, campo in ((avvisi_rischio, "avvisi_rischio"),
+                              (assistente_esterno, "assistente_esterno")):  # fmt: skip
+            if not isinstance(valore, bool):
+                raise ValidationError(f"«{campo}» dev'essere sì o no.", campo=campo)
+        self._preferenze.salva(utente, giorni_promemoria, avvisi_rischio, assistente_esterno)
+        return Preferenze(giorni_promemoria, avvisi_rischio, assistente_esterno)
+
+    def promemoria(self, utente_id: int, *, oggi: date | None = None) -> Promemoria:
+        """Alveari da rivedere secondo la soglia dell'utente e, se li vuole, gli avvisi di rischio.
+
+        Gli avvisi sono le ispezioni degli ultimi `GIORNI_AVVISI_RISCHIO` giorni con rischio medio
+        o alto, solo degli alveari attivi: un'arnia eliminata non ha bisogno di promemoria (la
+        query Q6 non distingue, per questo qui si parte dagli alveari attivi).
+
+        Raises:
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        scelte = self.preferenze(utente)
+        da_controllare = tuple(
+            (r["codice"], r["ultima"])
+            for r in self._alveari.trascurati(utente, scelte.giorni_promemoria)
+        )
+        a_rischio: list[tuple[str, date, str]] = []
+        if scelte.avvisi_rischio:
+            dal = (oggi or date.today()) - timedelta(days=GIORNI_AVVISI_RISCHIO)
+            for alveare in self._alveari.trova_alveari_attivi(utente):
+                for i in self._ispezioni.ispezioni_per_alveare(utente, alveare.id):
+                    gravi = (LivelloRischio.MEDIO, LivelloRischio.ALTO)
+                    if i.data_ispezione >= dal and i.livello_rischio in gravi:
+                        etichetta = ETICHETTE_RISCHIO[i.livello_rischio]
+                        a_rischio.append((alveare.codice, i.data_ispezione, etichetta))
+        a_rischio.sort(key=lambda a: a[1], reverse=True)
+        return Promemoria(
+            scelte.giorni_promemoria, da_controllare, tuple(a_rischio), scelte.avvisi_rischio
+        )
+
+    def configurazione_visibile(self) -> tuple[tuple[str, str, str], ...]:
+        """La configurazione da `.env` da mostrare (sezione, voce, valore): **mai i segreti**.
+
+        Password e chiave API si dicono solo «impostata» o «mancante». Senza configurazione
+        (servizi costruiti a mano, nei test) l'elenco è vuoto.
+        """
+        cfg = self._configurazione
+        if cfg is None:
+            return ()
+        db, llm = cfg.database, cfg.llm
+        voci = [
+            ("Database", "Server", f"{db.host}:{db.porta}"),
+            ("Database", "Nome del database", db.nome),
+            ("Database", "Utente", db.utente),
+            ("Database", "Password", "impostata" if db.password else "mancante"),
+            ("Assistente AI", "Provider", llm.provider),
+            ("Assistente AI", "Modello", llm.modello),
+            ("Assistente AI", "Dove gira", "su questo computer" if llm.in_locale else "esterno"),
+            ("Assistente AI", "Tempo massimo di risposta", f"{llm.timeout} s"),
+        ]
+        if llm.in_locale:
+            voci.append(("Assistente AI", "Indirizzo di Ollama", llm.ollama_url))
+        else:
+            voci.append(("Assistente AI", "Chiave API", "impostata" if llm.api_key else "mancante"))
+        voci += [
+            ("Modello di previsione", "File", cfg.percorso_modello.name),
+            ("Registro (log)", "Livello", cfg.livello_log),
+        ]
+        return tuple(voci)
+
+    # ----------------------------------------------------------------------- #
     # Panoramica e stato del sistema (Home)
     # ----------------------------------------------------------------------- #
 
@@ -596,7 +797,9 @@ class Servizi:
             alveari_attivi=int(riga["alveari_attivi"]),
             ispezioni_30_giorni=int(riga["ispezioni_30_giorni"]),
             produzione_stagione_kg=float(riga["produzione_stagione_kg"]),
-            alveari_da_controllare=len(self._alveari.trascurati(utente)),
+            alveari_da_controllare=len(
+                self._alveari.trascurati(utente, self.preferenze(utente).giorni_promemoria)
+            ),
         )
 
     def stato_modello(self) -> StatoModello:
@@ -1364,6 +1567,12 @@ class Servizi:
         utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
         identificativo = _id_positivo(ispezione_id, "ispezione_id", obbligatorio=True)
 
+        if self._llm_in_locale is False and not self.preferenze(utente).assistente_esterno:
+            raise ValidationError(
+                "Hai scelto di non inviare le note a servizi esterni (Impostazioni, AI e "
+                "Modelli), e l'assistente configurato è esterno: nessuna nota è stata inviata.",
+                campo="assistente_esterno",
+            )
         contesto = self._contesto_ispezione(utente, identificativo)
         assistente = self.assistente
         esito = assistente.riassumi(contesto)
@@ -1685,4 +1894,5 @@ def crea_servizi(configurazione: Config | None = None) -> Servizi:
         descrizione_llm=cfg.llm.descrizione(),
         timeout_llm=cfg.llm.timeout,
         llm_in_locale=cfg.llm.in_locale,
+        configurazione=cfg,
     )

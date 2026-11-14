@@ -26,6 +26,7 @@ from avvio import (
     apiari,
     avvia,
     ispezioni_dell_apiario,
+    preferenze,
     riepiloghi_ispezione,
     svuota_letture,
 )
@@ -204,7 +205,20 @@ st.text_area(
 )
 
 generato = None
-if st.button("Genera il riepilogo", type="primary", key="genera_riepilogo"):
+# M6-T13: chi non vuole che le note escano dal PC lo sceglie in Impostazioni; il servizio lo fa
+# rispettare comunque, qui si evita di proporre un bottone che non può funzionare.
+try:
+    vietato_esterno = info.in_locale is False and not preferenze(utente).assistente_esterno
+except BeeWatchError as errore:
+    mostra_errore(errore)
+    vietato_esterno = True
+if vietato_esterno:
+    st.warning(
+        "L'assistente configurato è esterno, e in **Impostazioni** hai scelto di non inviare le "
+        "note fuori dal PC: il riepilogo non si genera.",
+        icon="🔒",
+    )
+elif st.button("Genera il riepilogo", type="primary", key="genera_riepilogo"):
     minuti = max(1, round(info.attesa_massima_s / 60))
     try:
         with st.spinner(

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import pytest
 from accesso_finto import EMAIL_DEMO, GIRI_TEST, PASSWORD_DEMO, UtentiInMemoria
-from anagrafica_finta import DATABASE_SPENTO, anagrafica_di_prova
+from anagrafica_finta import DATABASE_SPENTO, anagrafica_di_prova, ispezioni_di_prova
 from app_finta import APP, DashboardFinto, PredittoreStub, installa, valori
+from preferenze_finte import PreferenzeInMemoria
 from streamlit.testing.v1 import AppTest
 
 from beewatch import sicurezza
@@ -27,7 +28,8 @@ def utenti(app_pronta, monkeypatch) -> UtentiInMemoria:
         app_pronta,
         monkeypatch,
         Servizi(None, utenti=utenti, apiari=apiari, alveari=alveari,
-                dashboard=DashboardFinto(), crea_predittore=PredittoreStub),
+                dashboard=DashboardFinto(), crea_predittore=PredittoreStub,
+                preferenze=PreferenzeInMemoria(), ispezioni=ispezioni_di_prova(alveari)),
     )  # fmt: skip
     utenti.apiari = apiari  # per guardare cosa crea l'onboarding
     utenti.alveari = alveari
@@ -241,7 +243,13 @@ def test_i_primi_passi_controllano_i_campi_obbligatori(utenti):
 def test_senza_utente_dimostrativo_il_bottone_lo_spiega(app_pronta, monkeypatch):
     utenti = UtentiInMemoria(con_demo=False)
     apiari, alveari = anagrafica_di_prova()
-    installa(app_pronta, monkeypatch, Servizi(None, utenti=utenti, apiari=apiari, alveari=alveari))
+    installa(
+        app_pronta,
+        monkeypatch,
+        Servizi(
+            None, utenti=utenti, apiari=apiari, alveari=alveari, preferenze=PreferenzeInMemoria()
+        ),
+    )
 
     at = apri().button(key="accedi_demo").click().run()
 

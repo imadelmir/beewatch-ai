@@ -204,6 +204,7 @@ Contenuto, dall'alto in basso:
    | `5_Dashboard.py` | Dashboard |
    | `6_Trasparenza.py` | Trasparenza |
    | `7_Report.py` | Report (M6-T12, oltre alle sei originali) |
+   | `8_Impostazioni.py` | Impostazioni (M6-T13, oltre alle sei originali) |
 
    In fondo alla sidebar, dopo l'accesso: chi è entrato e il bottone **Esci**.
 

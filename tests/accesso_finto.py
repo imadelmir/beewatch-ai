@@ -47,6 +47,26 @@ class UtentiInMemoria:
         }
         return nuovo
 
+    def trova(self, utente_id: int) -> dict | None:
+        if self.errore:
+            raise self.errore
+        return dict(self.righe[utente_id]) if utente_id in self.righe else None
+
+    def aggiorna_profilo(self, utente_id: int, nome_completo: str, email: str) -> None:
+        if self.errore:
+            raise self.errore
+        if any(r["email"] == email and r["id"] != utente_id for r in self.righe.values()):
+            raise ValidationError("Esiste già un account con questa email.", campo="email")
+        self.righe[utente_id].update(nome_completo=nome_completo, email=email)
+
+    def cambia_password(self, utente_id: int, hash_password: str) -> None:
+        self.righe[utente_id]["hash_password"] = hash_password
+
+    def elimina(self, utente_id: int) -> None:
+        if utente_id not in self.righe:
+            raise ValidationError("Utente non trovato.", campo="utente_id")
+        del self.righe[utente_id]
+
     def trova_per_email(self, email: str) -> dict | None:
         if self.errore:
             raise self.errore
