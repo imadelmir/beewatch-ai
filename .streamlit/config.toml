@@ -2,7 +2,8 @@
 # Streamlit lo legge dalla cartella da cui si lancia `streamlit run`: la radice del progetto (e
 # /app nel contenitore, dove il Dockerfile lo copia).
 #
-# Niente CSS iniettato: il tema è tutto qui, in modo nativo (ui_spec §2 e §13).
+# Niente CSS iniettato: il tema è tutto qui, in modo nativo (ui_spec §2 e §13). È l'unico punto
+# dello stile dell'app (M6-T10): senza questo file l'app funziona uguale, con il tema di default.
 
 [theme]
 base = "light"
@@ -11,6 +12,21 @@ backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#FAF6F0"
 textColor = "#1A1A1A"
 font = "sans serif"
+# M6-T10 · l'identità del mockup con le sole chiavi native del tema (Streamlit 1.60–1.67)
+borderColor = "#E5DED4"
+showWidgetBorder = true
+baseRadius = "0.75rem"
+buttonRadius = "0.5rem"
+linkColor = "#C77D02"
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+metricValueFontSize = "1.875rem"
+dataframeHeaderBackgroundColor = "#FAF6F0"
+chartCategoricalColors = ["#C77D02", "#1A1A1A", "#6B6B6B", "#ED9C00", "#2E7D32", "#1565C0"]
+showSidebarBorder = true
+
+[theme.sidebar]
+backgroundColor = "#FFF8E7"
+secondaryBackgroundColor = "#FFFFFF"
 
 [server]
 # Evita che il file watcher rilanci l'app durante la demo

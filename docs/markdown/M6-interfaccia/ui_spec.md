@@ -100,7 +100,7 @@ diventano illeggibili su portatile.
 
 ## 5. Tema Streamlit
 
-File `.streamlit/config.toml`, da creare in **M6-T1**:
+File `.streamlit/config.toml`, creato in **M6-T1** ed esteso in **M6-T10**:
 
 ```toml
 [theme]
@@ -110,6 +110,21 @@ backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#FAF6F0"
 textColor = "#1A1A1A"
 font = "sans serif"
+# M6-T10 · l'identità del mockup con le sole chiavi native del tema (Streamlit 1.60–1.67)
+borderColor = "#E5DED4"
+showWidgetBorder = true
+baseRadius = "0.75rem"
+buttonRadius = "0.5rem"
+linkColor = "#C77D02"
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+metricValueFontSize = "1.875rem"
+dataframeHeaderBackgroundColor = "#FAF6F0"
+chartCategoricalColors = ["#C77D02", "#1A1A1A", "#6B6B6B", "#ED9C00", "#2E7D32", "#1565C0"]
+showSidebarBorder = true
+
+[theme.sidebar]
+backgroundColor = "#FFF8E7"
+secondaryBackgroundColor = "#FFFFFF"
 
 [server]
 # Evita che il file watcher rilanci l'app durante la demo
@@ -121,6 +136,18 @@ gatherUsageStats = false
 
 Il file **va committato**: senza, chi clona il repository vede l'app con il tema
 di default e la demo non corrisponde agli screenshot della documentazione.
+
+**M6-T10 · l'identità del mockup, in modo nativo.** Il mockup ad alta fedeltà
+(`BeeWatch-AI_Mockup-UI_corretto`) ha card arrotondate con bordo leggero, titoli
+in grassetto, una sidebar color miele e valori delle metriche ben leggibili. Tutto
+questo si ottiene con le chiavi native del tema (`borderColor`, `baseRadius`,
+`headingFontWeights`, `metricValueFontSize`, `[theme.sidebar]`…), disponibili da
+Streamlit 1.60: **nessun CSS iniettato**, quindi le regole del §2 e del §13
+restano valide. Restano fuori, per gli stessi motivi del §13, il tema scuro, il
+font Poppins (richiederebbe un file esterno) e lo sfondo a nido d'ape (richiede
+CSS). Le versioni di Streamlit e Plotly sono bloccate sull'intervallo provato
+(`requirements.txt`), e un test controlla che ogni chiave del tema esista nella
+versione installata.
 
 ---
 

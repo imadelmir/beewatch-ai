@@ -83,7 +83,8 @@ def test_il_config_toml_esiste_ed_e_identico_al_paragrafo_5_della_specifica():
 
 def test_i_valori_del_tema_sono_quelli_approvati():
     tema = tomllib.loads((RADICE / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
-    assert tema["theme"] == {
+    base = {k: v for k, v in tema["theme"].items() if not isinstance(v, dict)}
+    approvati = {
         "base": "light",
         "primaryColor": "#C77D02",
         "backgroundColor": "#FFFFFF",
@@ -91,6 +92,11 @@ def test_i_valori_del_tema_sono_quelli_approvati():
         "textColor": "#1A1A1A",
         "font": "sans serif",
     }
+    assert {k: base[k] for k in approvati} == approvati
+    # M6-T10: le estensioni usano solo colori della palette del §3
+    assert base["borderColor"] == "#E5DED4" and base["linkColor"] == "#C77D02"
+    assert base["chartCategoricalColors"][:3] == ["#C77D02", "#1A1A1A", "#6B6B6B"]
+    assert tema["theme"]["sidebar"]["backgroundColor"] == "#FFF8E7"
     assert tema["server"]["runOnSave"] is False
     assert tema["browser"]["gatherUsageStats"] is False
 
@@ -328,3 +334,49 @@ def test_i_due_grep_della_dod_di_m6_t9():
                 ),
             )
             assert testo.count("unsafe_allow_html") == corpo.count("unsafe_allow_html")
+
+
+# --------------------------------------------------------------------------- #
+# M6-T10: tema nativo, versioni bloccate
+# --------------------------------------------------------------------------- #
+
+
+def chiavi_del_tema(tema: dict, prefisso: str = "theme") -> list[str]:
+    chiavi = []
+    for nome, valore in tema.items():
+        if isinstance(valore, dict):
+            chiavi += chiavi_del_tema(valore, f"{prefisso}.{nome}")
+        else:
+            chiavi.append(f"{prefisso}.{nome}")
+    return chiavi
+
+
+def test_ogni_chiave_del_tema_esiste_nella_versione_installata():
+    """Una chiave sbagliata Streamlit la ignora in silenzio: qui invece si vede."""
+    from streamlit import config as configurazione_streamlit
+
+    tema = tomllib.loads((RADICE / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    ammesse = configurazione_streamlit._config_options_template
+    for chiave in chiavi_del_tema(tema["theme"]):
+        assert chiave in ammesse, chiave
+
+
+def test_lo_stile_e_solo_nel_config_toml_senza_file_css():
+    assert not list(APP.rglob("*.css"))
+    assert not list((RADICE / ".streamlit").glob("*.css"))
+
+
+@pytest.mark.parametrize("pacchetto", ["streamlit", "plotly"])
+def test_le_versioni_dellinterfaccia_sono_bloccate_e_quella_installata_rientra(pacchetto):
+    from importlib.metadata import version
+
+    def numeri(testo: str) -> tuple[int, ...]:
+        return tuple(int(n) for n in re.findall(r"\d+", testo)[:3])
+
+    installata = numeri(version(pacchetto))
+    for file in ("requirements.txt", "pyproject.toml"):
+        testo = (RADICE / file).read_text(encoding="utf-8")
+        trovato = re.search(rf'^\s*"?{pacchetto}>=([\d.]+),<([\d.]+)', testo, flags=re.M)
+        assert trovato, (file, pacchetto)  # un minimo E un massimo: la versione è bloccata
+        minimo, massimo = numeri(trovato.group(1)), numeri(trovato.group(2))
+        assert minimo <= installata < massimo, (file, pacchetto, version(pacchetto))

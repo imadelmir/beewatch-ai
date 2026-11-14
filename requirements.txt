@@ -12,7 +12,7 @@
 #     pip install -e ".[dev]"                  per sviluppare (consigliato)
 
 # --- core ---
-streamlit>=1.40
+streamlit>=1.60,<1.68
 pandas>=2.2
 numpy>=1.26
 # Bloccato alla serie 1.9: models/produzione_v1.joblib e' un pickle di scikit-learn e va
@@ -24,4 +24,4 @@ python-dotenv>=1.0
 requests>=2.32
 
 # --- grafici ---
-plotly>=5.24
+plotly>=5.24,<7
