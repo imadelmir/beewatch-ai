@@ -35,6 +35,26 @@ def problema_password(password: str) -> str | None:
     return None
 
 
+# Le tre fasce dell'indicatore sotto il campo della password (mockup, «Password robusta»).
+FORZA_DEBOLE, FORZA_MEDIA, FORZA_ROBUSTA = "debole", "media", "robusta"
+
+
+def forza_password(password: str) -> tuple[int, str]:
+    """Quanto è robusta una password, da 0 a 4, e la fascia a parole; solo un'indicazione.
+
+    Un punto per: almeno 8 caratteri, almeno 12, lettere maiuscole e minuscole insieme, cifre o
+    simboli. Una password che non rispetta le regole (`problema_password`) resta «debole».
+    """
+    if not password or problema_password(password) is not None:
+        return 0, FORZA_DEBOLE
+    punti = 1  # almeno 8 caratteri, senza spazi ai bordi
+    punti += len(password) >= 12
+    punti += any(c.islower() for c in password) and any(c.isupper() for c in password)
+    punti += any(not c.isalpha() for c in password)
+    fascia = FORZA_ROBUSTA if punti >= 3 else FORZA_MEDIA if punti == 2 else FORZA_DEBOLE
+    return punti, fascia
+
+
 def calcola_hash(password: str) -> str:
     """L'hash bcrypt di una password già controllata da `problema_password`."""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(GIRI)).decode("ascii")

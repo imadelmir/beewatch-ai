@@ -20,7 +20,6 @@ from preferenze_finte import PreferenzeInMemoria
 from streamlit.testing.v1 import AppTest
 
 from beewatch import sicurezza
-from beewatch.models import Apiario
 from beewatch.services import ACCESSO_NEGATO, Servizi
 
 
@@ -55,15 +54,22 @@ def accedi(at: AppTest, email: str, password: str) -> AppTest:
 
 def registrati(at: AppTest, *, consenso: bool = True, **campi) -> AppTest:
     at.switch_page("schermate/registrati.py").run()
-    dati = {"nome": "Mario Rossi", "email": "mario@esempio.it", "password": "favo-di-miele"}
+    dati = {"nome": "Mario", "cognome": "Rossi", "email": "mario@esempio.it",
+            "password": "favo-di-miele", "apiario": ""}  # fmt: skip
     dati.update(campi)
     at.text_input(key="registrati_nome").input(dati["nome"])
+    at.text_input(key="registrati_cognome").input(dati["cognome"])
     at.text_input(key="registrati_email").input(dati["email"])
+    at.text_input(key="registrati_apiario").input(dati["apiario"])
     at.text_input(key="registrati_password").input(dati["password"])
     at.text_input(key="registrati_conferma").input(dati.get("conferma", dati["password"]))
     if consenso:
         at.checkbox(key="registrati_consenso").check()
     return at.button(key="registrati_invia").click().run()
+
+
+def in_accedi(at: AppTest) -> bool:
+    return "Bentornato" in valori(at.title)
 
 
 def nella_home(at: AppTest) -> bool:
@@ -81,7 +87,7 @@ def test_senza_accesso_si_vede_solo_accedi(utenti):
     at = apri()
 
     assert not at.exception and not at.error
-    assert "Bentornato" in valori(at.subheader)
+    assert in_accedi(at)
     assert not at.metric  # niente dati dell'app
     assert at.session_state["accesso"] is None
 
@@ -103,9 +109,7 @@ def test_senza_accesso_le_pagine_dellapp_non_mostrano_nulla(utenti, pagina):
     # O Streamlit ripiega su Accedi, o la pagina si ferma al secondo lucchetto di `avvia`:
     # in nessun caso compaiono i dati di qualcuno.
     assert not at.metric and not at.dataframe
-    assert "Bentornato" in valori(at.subheader) or any(
-        "accedi a BeeWatch AI" in i for i in valori(at.info)
-    )
+    assert in_accedi(at) or any("accedi a BeeWatch AI" in i for i in valori(at.info))
     assert at.session_state["utente_id"] is None
 
 
@@ -137,7 +141,7 @@ def test_con_la_password_sbagliata_lo_dice_e_resta_fuori(utenti):
 
     [errore] = valori(at.error)
     assert ACCESSO_NEGATO in errore
-    assert "Bentornato" in valori(at.subheader) and at.session_state["accesso"] is None
+    assert in_accedi(at) and at.session_state["accesso"] is None
 
 
 def test_lutente_dimostrativo_entra_con_un_bottone(utenti):
@@ -161,7 +165,7 @@ def test_esci_riporta_ad_accedi(utenti):
 
     at = at.sidebar.button(key="esci").click().run()
 
-    assert "Bentornato" in valori(at.subheader)
+    assert in_accedi(at)
     assert at.session_state["accesso"] is None and at.session_state["utente_id"] is None
 
 
@@ -209,23 +213,59 @@ def test_registrarsi_porta_ai_primi_passi_e_poi_alla_home(utenti):
     at = registrati(apri())
 
     assert not at.exception and not at.error
-    assert valori(at.title) == ["🧭 Benvenuto, Mario Rossi"]
+    assert valori(at.title) == ["Aggiungi il tuo primo alveare"]
     assert at.session_state["utente_id"] == 3 and at.session_state["onboarding"] == 1
+    assert at.session_state["accesso"] == "Mario Rossi"  # nome e cognome insieme
     assert utenti.righe[3]["hash_password"] != "favo-di-miele"
+    assert "Passo 2 di 3" in valori(at.caption)  # il primo, il profilo, è la registrazione
 
+    # senza apiario, il primo passo chiede anche il suo nome
+    at.text_input(key="onboarding_codice").input("O1")
     at.text_input(key="onboarding_nome").input("Orto di casa")
-    at = at.button(key="onboarding_apiario_invia").click().run()
+    at = at.button(key="onboarding_alveare_invia").click().run()
     assert at.session_state["onboarding"] == 2
     [apiario] = [a for a in utenti.apiari.righe.values() if a.utente_id == 3]
     assert apiario.nome == "Orto di casa" and at.session_state["apiario_attivo_id"] == apiario.id
-
-    at.text_input(key="onboarding_codice").input("O1")
-    at = at.button(key="onboarding_alveare_invia").click().run()
-    assert at.session_state["onboarding"] == 3
     assert [a.codice for a in utenti.alveari.righe.values() if a.apiario_id == apiario.id] == ["O1"]
 
+    at.slider(key="onboarding_giorni").set_value(14)
     at = at.button(key="onboarding_fine").click().run()
     assert nella_home(at) and at.session_state["onboarding"] is None
+
+
+def test_lapiario_scritto_alla_registrazione_nasce_subito(utenti):
+    at = registrati(apri(), apiario="Colline Sud")
+
+    [apiario] = [a for a in utenti.apiari.righe.values() if a.utente_id == 3]
+    assert apiario.nome == "Colline Sud"
+    assert at.selectbox(key="onboarding_apiario").options == ["Colline Sud"]
+    assert not [t for t in at.text_input if t.key == "onboarding_nome"]
+
+    at.text_input(key="onboarding_codice").input("A01")
+    at.number_input(key="onboarding_regina").set_value(2025)
+    at = at.button(key="onboarding_alveare_invia").click().run()
+
+    [alveare] = [a for a in utenti.alveari.righe.values() if a.apiario_id == apiario.id]
+    assert (alveare.codice, alveare.anno_regina) == ("A01", 2025)
+
+
+def test_le_preferenze_dei_primi_passi_si_salvano_e_si_torna_indietro(utenti, app_pronta):
+    at = registrati(apri(), apiario="Colline Sud")
+    at.text_input(key="onboarding_codice").input("A01")
+    at = at.button(key="onboarding_alveare_invia").click().run()
+
+    at = at.button(key="onboarding_indietro").click().run()
+    assert at.session_state["onboarding"] == 1  # di nuovo il primo alveare
+    assert at.button(key="onboarding_indietro_1").disabled  # prima c'è il profilo, già fatto
+
+    at.session_state["onboarding"] = 2
+    at.run()
+    at.slider(key="onboarding_giorni").set_value(21)
+    at.toggle(key="onboarding_esterno").set_value(False)
+    at = at.button(key="onboarding_fine").click().run()
+
+    preferenze = app_pronta.servizi().preferenze(3)
+    assert (preferenze.giorni_promemoria, preferenze.assistente_esterno) == (21, False)
 
 
 def test_i_primi_passi_si_possono_saltare(utenti):
@@ -240,8 +280,12 @@ def test_i_primi_passi_si_possono_saltare(utenti):
 def test_i_primi_passi_controllano_i_campi_obbligatori(utenti):
     at = registrati(apri())
 
-    at = at.button(key="onboarding_apiario_invia").click().run()
+    at = at.button(key="onboarding_alveare_invia").click().run()
+    [errore] = valori(at.error)
+    assert "Il codice dell'alveare è obbligatorio." in errore
 
+    at.text_input(key="onboarding_codice").input("A1")
+    at = at.button(key="onboarding_alveare_invia").click().run()
     [errore] = valori(at.error)
     assert "Il nome dell'apiario è obbligatorio." in errore
     assert at.session_state["onboarding"] == 1
@@ -271,24 +315,30 @@ def test_senza_utente_dimostrativo_il_bottone_lo_spiega(app_pronta, monkeypatch)
 
 
 def test_i_primi_passi_spiegano_gli_errori_dei_servizi(utenti):
-    at = registrati(apri())
-    utenti.apiari.crea(Apiario(utente_id=3, nome="Orto", id=None))  # nome già usato
+    at = registrati(apri(), apiario="Orto")
 
-    at.text_input(key="onboarding_nome").input("Orto")
-    at = at.button(key="onboarding_apiario_invia").click().run()
-    [errore] = valori(at.error)
-    assert "Hai già un apiario con questo nome" in errore
-    assert at.session_state["onboarding"] == 1
-
-    at.text_input(key="onboarding_nome").input("Bosco")
-    at = at.button(key="onboarding_apiario_invia").click().run()
-    at = at.button(key="onboarding_alveare_invia").click().run()  # codice vuoto
-    [errore] = valori(at.error)
-    assert "Il codice dell'alveare è obbligatorio." in errore
-
-    utenti.alveari.errore = DATABASE_SPENTO
     at.text_input(key="onboarding_codice").input("B1")
+    utenti.alveari.errore = DATABASE_SPENTO
     at = at.button(key="onboarding_alveare_invia").click().run()
     [errore] = valori(at.error)
     assert errore.startswith("**Non riesco a raggiungere il database.**")
-    assert at.session_state["onboarding"] == 2
+    assert at.session_state["onboarding"] == 1
+
+
+def test_senza_accesso_e_nei_primi_passi_non_ce_la_sidebar(utenti):
+    at = apri()
+    assert not at.sidebar.selectbox and not at.sidebar.button  # Accedi: schermo diviso
+
+    at = registrati(at)
+    assert at.session_state["onboarding"] == 1
+    assert not at.sidebar.selectbox and not at.sidebar.button
+
+
+def test_la_robustezza_della_password_si_vede_mentre_si_scrive(utenti):
+    at = apri()
+    at.switch_page("schermate/registrati.py").run()
+
+    at.text_input(key="registrati_password").input("Favo-di-miele-2026").run()
+
+    testo = " ".join(e.proto.body for e in at.get("html"))
+    assert "Password robusta" in testo and "bw-forza-robusta" in testo

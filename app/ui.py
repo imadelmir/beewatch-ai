@@ -29,6 +29,7 @@ cache attraverso `avvio`.
 
 from __future__ import annotations
 
+import base64
 import html
 import math
 from datetime import date
@@ -54,7 +55,13 @@ from beewatch.exceptions import (
 )
 from beewatch.logging_config import ottieni_logger
 from beewatch.models import LivelloRischio, StatoAlveare
-from beewatch.services import ApiarioScelta
+from beewatch.services import (
+    FORZA_DEBOLE,
+    FORZA_MEDIA,
+    FORZA_ROBUSTA,
+    ApiarioScelta,
+    forza_password,
+)
 
 logger = ottieni_logger("beewatch.app.ui")
 
@@ -411,6 +418,126 @@ def badge_stato(stato: StatoAlveare | str | None) -> None:
     stile = f"background:{sfondo};color:{colore};padding:2px 10px;border-radius:999px"
     pastiglia = f'<span style="{stile}">{icona} {html.escape(etichetta)}</span>'
     st.markdown(pastiglia, unsafe_allow_html=True)
+
+
+# --------------------------------------------------------------------------- #
+# Schermate prima dell'accesso (mockup: schermo diviso)
+# --------------------------------------------------------------------------- #
+
+# Le icone a linea del pannello, come nel mockup (tracciati SVG fissi, nessun dato dell'utente).
+_ICONE_PANNELLO = {
+    "previsioni": '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+    "assistente": '<rect x="4" y="7" width="16" height="12" rx="2"/><path d="M12 3v4M9 12h.01'
+    'M15 12h.01M9 16h6"/>',
+    "salute": '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/>',
+}
+CARATTERISTICHE = (
+    ("previsioni", "Previsioni ML sulla produzione"),
+    ("assistente", "Assistente AI in linguaggio naturale"),
+    ("salute", "Avvisi sullo stato sanitario degli alveari"),
+)
+
+
+def _come_immagine(svg: str, alternativo: str) -> str:
+    """Un SVG come `<img>` con i dati dentro: Streamlit toglie gli `<svg>` scritti nell'HTML."""
+    dati = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+    return f'<img src="data:image/svg+xml;base64,{dati}" alt="{html.escape(alternativo)}">'
+
+
+def logo_svg() -> str:
+    """Il logo del tema attivo, come immagine da mettere dentro una pagina."""
+    variante = "scuro" if tema.tema_attivo() == "dark" else "chiaro"
+    svg = (tema.FILE_CSS.parent.parent / "static" / f"logo_{variante}.svg").read_text(
+        encoding="utf-8"
+    )
+    return _come_immagine(svg, "BeeWatch AI")
+
+
+def _icona(nome: str) -> str:
+    colore = tema.PALETTE[tema.tema_attivo()]["accento-testo"]
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" '
+        f'fill="none" stroke="{colore}" stroke-width="1.8" stroke-linecap="round" '
+        f'stroke-linejoin="round">{_ICONE_PANNELLO[nome]}</svg>'
+    )
+    return _come_immagine(svg, "")
+
+
+def pannello_benvenuto() -> None:
+    """Il lato sinistro di Accedi e Registrati: logo, slogan, cosa fa l'app.
+
+    Va chiamato dentro la colonna di sinistra; il CSS lo allunga a tutta l'altezza.
+    """
+    voci = "".join(
+        f'<li><span class="bw-icona-tonda">{_icona(icona)}</span>{html.escape(testo)}</li>'
+        for icona, testo in CARATTERISTICHE
+    )
+    st.html(
+        f'<div class="bw-pannello"><div class="bw-pannello-logo">{logo_svg()}</div>'
+        '<div class="bw-pannello-centro">'
+        '<h2 class="bw-slogan">Monitora il tuo<br><span>apiario con l\'AI.</span></h2>'
+        '<p class="bw-pannello-testo">Ispezioni digitali, previsioni di produzione con il Machine '
+        "Learning e un assistente AI sempre al tuo fianco.</p>"
+        f'<ul class="bw-caratteristiche">{voci}</ul></div>'
+        f'<p class="bw-pannello-piede">© {date.today().year} BeeWatch AI · Progetto finale '
+        "Python</p></div>"
+    )
+
+
+def separatore_oppure() -> None:
+    """La riga sottile con «oppure» in mezzo, fra due modi di entrare."""
+    st.html('<div class="bw-oppure">oppure</div>')
+
+
+ETICHETTE_FORZA = {
+    FORZA_DEBOLE: "Password debole",
+    FORZA_MEDIA: "Password media",
+    FORZA_ROBUSTA: "Password robusta",
+}
+
+
+def indicatore_forza(password: str) -> None:
+    """La barra sotto il campo della password, con la fascia a parole (non solo il colore)."""
+    if not password:
+        return
+    punti, fascia = forza_password(password)
+    st.html(
+        f'<div class="bw-forza bw-forza-{fascia}"><span style="width:{max(punti, 1) * 25}%"></span>'
+        f'</div><div class="bw-forza-testo bw-forza-{fascia}">{ETICHETTE_FORZA[fascia]}</div>'
+    )
+
+
+PASSI_PRIMI_PASSI = ("Profilo", "Primo alveare", "Preferenze")
+
+
+def passi_numerati(attuale: int) -> None:
+    """La fila dei passi del mockup: i fatti con la spunta, l'attuale pieno, i prossimi vuoti.
+
+    `attuale` parte da 1; il primo passo («Profilo») è la registrazione.
+    """
+    pezzi = []
+    for numero, etichetta in enumerate(PASSI_PRIMI_PASSI, start=1):
+        stato = "fatto" if numero < attuale else "attuale" if numero == attuale else "dopo"
+        segno = "✓" if stato == "fatto" else str(numero)
+        if numero > 1:
+            linea = "fatta" if numero <= attuale else "dopo"
+            pezzi.append(f'<div class="bw-passo-linea {linea}"></div>')
+        pezzi.append(
+            f'<div class="bw-passo {stato}"><div class="bw-passo-cerchio">{segno}</div>'
+            f'<div class="bw-passo-nome">{html.escape(etichetta)}</div></div>'
+        )
+    st.html(f'<div class="bw-passi">{"".join(pezzi)}</div>')
+
+
+def logo_centrato() -> None:
+    """Il logo del tema attivo, al centro (in cima ai primi passi)."""
+    st.html(f'<div class="bw-logo-centrato">{logo_svg()}</div>')
+
+
+def titolo_modulo(titolo: str, sottotitolo: str) -> None:
+    """Il titolo grande del modulo («Bentornato») e la riga sotto, come nel mockup."""
+    st.title(titolo)
+    st.caption(sottotitolo)
 
 
 # --------------------------------------------------------------------------- #

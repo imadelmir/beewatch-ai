@@ -53,6 +53,9 @@ PALETTE: dict[str, dict[str, str]] = {
         "ombra": "0 1px 2px rgba(30, 26, 18, 0.04), 0 8px 24px -12px rgba(30, 26, 18, 0.10)",
         "favo": "rgba(232, 190, 90, 0.20)",
         "alone": "rgba(255, 214, 102, 0.35)",
+        # il pannello di benvenuto di Accedi e Registrati: più caldo, con il favo più marcato
+        "pannello": "linear-gradient(160deg, #FFF4D3 0%, #FDECBE 100%)",
+        "favo-forte": "rgba(240, 190, 70, 0.45)",
     },
     "dark": {
         "accento": "#FFC709",
@@ -76,6 +79,8 @@ PALETTE: dict[str, dict[str, str]] = {
         "ombra": "0 1px 2px rgba(0, 0, 0, 0.4)",
         "favo": "rgba(255, 199, 9, 0.05)",
         "alone": "rgba(255, 170, 0, 0.10)",
+        "pannello": "linear-gradient(160deg, #1C1607 0%, #0E0B04 100%)",
+        "favo-forte": "rgba(255, 199, 9, 0.16)",
     },
 }
 
@@ -116,6 +121,7 @@ def variabili(tema: Tema) -> str:
     colori = PALETTE[tema]
     righe = [f"--bw-{nome}: {valore};" for nome, valore in colori.items()]
     righe.append(f"--bw-favo: {_favo(colori['favo'])};")
+    righe.append(f"--bw-favo-forte: {_favo(colori['favo-forte'])};")
     righe.append(
         f"--bw-alone: radial-gradient(ellipse 60% 50% at 100% 0%, {colori['alone']}, transparent);"
     )
