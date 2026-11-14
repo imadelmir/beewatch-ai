@@ -22,7 +22,7 @@ Lo stato dell'accesso vive in `st.session_state` e nasce in `avvio.py`, come il 
 from __future__ import annotations
 
 import streamlit as st
-from avvio import accesso_effettuato, avvia, passo_onboarding
+from avvio import accesso_completo, accesso_effettuato, avvia, passo_onboarding
 
 avvia("BeeWatch AI", pubblica=True, router=True)
 
@@ -50,4 +50,6 @@ else:
         st.Page("pages/8_Impostazioni.py", title="Impostazioni", icon=":material/settings:"),
     ]
 
-st.navigation(pagine).run()
+# Prima dell'accesso e nei primi passi niente sidebar, come nel mockup: si passa da Accedi a
+# Registrati con i link della pagina.
+st.navigation(pagine, position="sidebar" if accesso_completo() else "hidden").run()

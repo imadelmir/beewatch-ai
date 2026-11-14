@@ -87,10 +87,14 @@ from beewatch.repositories_riferimento import (
     RiepiloghiRepository,
     UtentiRepository,
 )
-from beewatch.sicurezza import (
+from beewatch.sicurezza import (  # noqa: F401 - FORZA_* e forza_password servono all'interfaccia
     BYTE_MASSIMI_PASSWORD,
     CARATTERI_MINIMI_PASSWORD,
+    FORZA_DEBOLE,
+    FORZA_MEDIA,
+    FORZA_ROBUSTA,
     calcola_hash,
+    forza_password,
     impronta_token,
     nuovo_token,
     problema_password,

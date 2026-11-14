@@ -88,7 +88,7 @@ CHIAVE_RIPRESA = "ripresa_tentata"
 CHIAVE_RICORDA = "ricorda_accesso"
 CHIAVE_COOKIE = "cookie_in_attesa"
 NOME_COOKIE = "bw_sessione"
-PASSI_ONBOARDING = 3  # primo apiario, primo alveare, tutto pronto
+PASSI_ONBOARDING = 2  # primo alveare (con l'apiario), preferenze; il profilo è la registrazione
 
 
 # --------------------------------------------------------------------------- #
@@ -399,6 +399,11 @@ def nome_in_accesso() -> str | None:
     return st.session_state[CHIAVE_ACCESSO]
 
 
+def accesso_completo() -> bool:
+    """Dentro l'app vera e propria: accesso fatto e primi passi finiti (o saltati)."""
+    return accesso_effettuato() and passo_onboarding() is None
+
+
 def passo_onboarding() -> int | None:
     return st.session_state[CHIAVE_ONBOARDING]
 
@@ -430,6 +435,13 @@ def avanza_onboarding() -> None:
     """Il passo dopo dei primi passi; dopo l'ultimo, l'onboarding finisce."""
     passo = (st.session_state[CHIAVE_ONBOARDING] or 0) + 1
     st.session_state[CHIAVE_ONBOARDING] = passo if passo <= PASSI_ONBOARDING else None
+    st.rerun()
+
+
+def indietro_onboarding() -> None:
+    """Il passo prima (dal primo non si torna: il profilo è la registrazione, già fatta)."""
+    passo = st.session_state[CHIAVE_ONBOARDING] or 1
+    st.session_state[CHIAVE_ONBOARDING] = max(1, passo - 1)
     st.rerun()
 
 

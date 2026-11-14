@@ -218,7 +218,10 @@ def test_nessun_colore_esadecimale_fuori_dalla_palette_in_app(ui):
         ui.ATTENZIONE, ui.CRITICO, ui.INFORMAZIONE, ui.NEUTRO, "#FFFFFF",
     }  # fmt: skip
     # i token dei due temi del mockup (app/tema.py)
-    ammessi |= {v for colori in tema.PALETTE.values() for v in colori.values() if v[0] == "#"}
+    ammessi |= {
+        c for colori in tema.PALETTE.values() for v in colori.values()
+        for c in re.findall(r"#[0-9A-Fa-f]{6}\b", v)
+    }  # fmt: skip
     for percorso in sorted(APP.rglob("*.py")):
         trovati = set(re.findall(r"#[0-9A-Fa-f]{6}\b", percorso.read_text(encoding="utf-8")))
         assert trovati <= ammessi, (percorso.name, trovati - ammessi)

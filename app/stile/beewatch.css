@@ -245,3 +245,269 @@ section[data-testid="stSidebar"] {
   background: var(--bw-accento) !important;
   color: #1E1A12 !important;
 }
+
+/* ---------------------------------------------------------------- Accedi e Registrati */
+
+/* schermo diviso: a sinistra il pannello di benvenuto, a destra il modulo */
+[data-testid="stMainBlockContainer"]:has(.st-key-bw_lato_benvenuto) {
+  padding: 0 !important;
+  max-width: none;
+}
+
+[data-testid="stHorizontalBlock"]:has(> div .st-key-bw_lato_benvenuto) {
+  gap: 0;
+  min-height: 100vh;
+}
+
+.st-key-bw_lato_benvenuto {
+  min-height: 100vh;
+  padding: 3rem 3.5rem;
+  background-image: var(--bw-favo-forte), var(--bw-pannello);
+  background-size: 112px 194px, 100% 100%;
+  border-right: 1px solid var(--bw-bordo);
+}
+
+.bw-pannello {
+  min-height: calc(100vh - 6rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.bw-pannello-logo img {
+  height: 44px;
+  width: auto;
+}
+
+.bw-slogan {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0 0 1.25rem 0;
+  padding: 0;
+  color: var(--bw-testo);
+}
+
+.bw-slogan span {
+  color: var(--bw-accento);
+}
+
+.bw-pannello-testo {
+  color: var(--bw-testo2);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  max-width: 28rem;
+}
+
+.bw-caratteristiche {
+  list-style: none;
+  padding: 0;
+  margin: 2.25rem 0 0 0;
+}
+
+.bw-caratteristiche li {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0 0 1.1rem 0;
+  font-weight: 500;
+  color: var(--bw-testo);
+}
+
+.bw-icona-tonda {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--bw-accento-testo);
+  background: var(--bw-accento-tenue);
+}
+
+.bw-pannello-piede {
+  font-size: 0.8rem;
+  color: var(--bw-testo2);
+  margin: 0;
+}
+
+.st-key-bw_lato_modulo {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 3rem 1.5rem;
+}
+
+.st-key-bw_lato_modulo .st-key-bw_tema {
+  align-items: flex-end;
+  margin-bottom: 3rem;
+}
+
+.st-key-bw_lato_modulo [data-testid="stForm"] {
+  background: transparent;
+  border: none !important;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* «oppure», fra due righe sottili */
+.bw-oppure {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--bw-testo2);
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+
+.bw-oppure::before,
+.bw-oppure::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--bw-testo2);
+  opacity: 0.35;
+}
+
+.st-key-bw_link_centrato {
+  align-items: center;
+}
+
+.st-key-bw_link_centrato [data-testid="stPageLink"] p {
+  color: var(--bw-testo2);
+}
+
+.st-key-bw_link_centrato [data-testid="stPageLink"] strong {
+  color: var(--bw-accento-testo);
+  font-weight: 600;
+}
+
+/* l'indicatore della robustezza della password */
+.bw-forza {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bw-bordo);
+  overflow: hidden;
+  margin-top: -0.4rem;
+}
+
+.bw-forza span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.bw-forza-testo {
+  font-size: 0.78rem;
+  font-weight: 500;
+  margin-top: 0.3rem;
+}
+
+.bw-forza-debole span { background: var(--bw-critico); }
+.bw-forza-media span { background: var(--bw-attenzione); }
+.bw-forza-robusta span { background: var(--bw-successo); }
+.bw-forza-testo.bw-forza-debole { color: var(--bw-critico); }
+.bw-forza-testo.bw-forza-media { color: var(--bw-attenzione); }
+.bw-forza-testo.bw-forza-robusta { color: var(--bw-successo); }
+
+/* ---------------------------------------------------------------- primi passi */
+
+.bw-logo-centrato {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0 1.5rem 0;
+}
+
+.bw-logo-centrato img {
+  height: 44px;
+  width: auto;
+}
+
+.st-key-bw_onboarding {
+  max-width: 820px;
+  margin: 0 auto;
+  background: var(--bw-superficie);
+  border: 1px solid var(--bw-bordo);
+  border-radius: 20px;
+  box-shadow: var(--bw-ombra);
+  padding: 2rem 2.5rem 1.75rem 2.5rem;
+}
+
+.st-key-bw_onboarding [data-testid="stForm"] {
+  background: transparent;
+  border: none !important;
+  box-shadow: none;
+  padding: 0;
+}
+
+.bw-passi {
+  display: flex;
+  align-items: flex-start;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--bw-bordo);
+  margin-bottom: 0.5rem;
+}
+
+.bw-passo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 7rem;
+}
+
+.bw-passo-cerchio {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  border: 2px solid var(--bw-bordo);
+  color: var(--bw-testo2);
+  background: var(--bw-superficie);
+}
+
+.bw-passo.fatto .bw-passo-cerchio,
+.bw-passo.attuale .bw-passo-cerchio {
+  background: var(--bw-accento);
+  border-color: var(--bw-accento);
+  color: #1E1A12;
+}
+
+.bw-passo-nome {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--bw-testo2);
+}
+
+.bw-passo.fatto .bw-passo-nome,
+.bw-passo.attuale .bw-passo-nome {
+  color: var(--bw-testo);
+}
+
+.bw-passo-linea {
+  flex: 1;
+  height: 2px;
+  margin-top: 19px;
+  background: var(--bw-bordo);
+}
+
+.bw-passo-linea.fatta {
+  background: var(--bw-accento);
+}
+
+.st-key-bw_salta {
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.st-key-bw_salta button {
+  color: var(--bw-testo2);
+}
+
+/* ---------------------------------------------------------------- caselle */
+
+/* il quadratino della casella: con il colore del bordo, sul crema non si vedrebbe */
+[data-testid="stCheckbox"] label > div:first-of-type {
+  border-color: var(--bw-testo2);
+}
