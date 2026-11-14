@@ -18,6 +18,7 @@ import pytest
 import streamlit as st
 from assistente_finto import RaccoltiVuoti, RiepiloghiInMemoria
 from previsione_finta import ModelliFinti, PrevisioniInMemoria, ProduzioneFinta
+from report_finto import ReportInMemoria
 from streamlit.testing.v1 import AppTest
 
 from beewatch.ml.predictor import Stima
@@ -159,6 +160,7 @@ def servizi_finti(
         modelli=ModelliFinti(),
         riepiloghi=RiepiloghiInMemoria(),
         raccolti=RaccoltiVuoti(),
+        report=ReportInMemoria(),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
         llm_in_locale=llm_in_locale,
     )

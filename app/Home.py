@@ -42,6 +42,7 @@ else:
         st.Page("pages/4_Assistente_AI.py", title="Assistente AI", icon="🤖"),
         st.Page("pages/5_Dashboard.py", title="Dashboard", icon="📊"),
         st.Page("pages/6_Trasparenza.py", title="Trasparenza", icon="🔍"),
+        st.Page("pages/7_Report.py", title="Report", icon="📄"),
     ]
 
 st.navigation(pagine).run()

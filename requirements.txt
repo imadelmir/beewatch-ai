@@ -24,6 +24,9 @@ python-dotenv>=1.0
 requests>=2.32
 # Hash delle password (M6-T11): bcrypt, come la colonna utenti.hash_password CHAR(60).
 bcrypt>=4.2,<6
+# Esportazione dei report (M6-T12): Excel e PDF, entrambi in Python puro.
+openpyxl>=3.1,<4
+fpdf2>=2.8,<3
 
 # --- grafici ---
 plotly>=5.24,<7
