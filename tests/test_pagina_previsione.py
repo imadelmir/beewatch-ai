@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 from anagrafica_finta import DATABASE_SPENTO, AlveariInMemoria, ApiariInMemoria, anagrafica_di_prova
-from app_finta import APP, DashboardFinto, installa, valori
+from app_finta import APP, DashboardFinto, con_accesso, installa, valori
 from previsione_finta import (
     FEATURE_INCOMPATIBILI,
     ModelliFinti,
@@ -69,7 +69,7 @@ def ambiente(app_pronta, monkeypatch) -> Ambiente:
 
 
 def apri() -> AppTest:
-    return AppTest.from_file(str(PAGINA), default_timeout=30).run()
+    return con_accesso(AppTest.from_file(str(PAGINA), default_timeout=30)).run()
 
 
 def calcola(at: AppTest, stato: str = "ND", anno: int = 2012, **parametri) -> AppTest:
@@ -257,7 +257,7 @@ def test_senza_modello_la_pagina_lo_dice_e_mostra_lo_storico(app_pronta, monkeyp
     assert not at.exception
     [errore] = valori(at.error)
     assert errore.startswith("**Il modello di previsione non è disponibile.**")
-    assert not at.button  # niente modulo: non c'è con cosa calcolare
+    assert not at.main.button  # niente modulo: non c'è con cosa calcolare
     assert "Storico delle previsioni" in valori(at.subheader)
     assert valori(at.warning)[0].startswith("**Limiti di trasferibilità.**")
 
@@ -282,7 +282,7 @@ def test_senza_dati_usda_rimanda_alletl(app_pronta, monkeypatch):
 
     assert not at.exception and not at.error
     assert any("run_etl.py" in t for t in valori(at.info))
-    assert not at.button
+    assert not at.main.button
 
 
 def test_senza_pannello_i_parametri_a_mano_spiegano_il_rimedio(app_pronta, monkeypatch):
@@ -294,7 +294,7 @@ def test_senza_pannello_i_parametri_a_mano_spiegano_il_rimedio(app_pronta, monke
     assert not at.exception
     [errore] = valori(at.error)
     assert "run_etl.py" in errore
-    assert not at.button  # niente modulo senza gli intervalli
+    assert not at.main.button  # niente modulo senza gli intervalli
     at.radio(key="modo").set_value("Dai dati storici di uno stato").run()
     assert at.button(key="previsione_invia")  # l'altro modo funziona
 
@@ -307,7 +307,7 @@ def test_con_il_database_spento_lo_dice_e_si_ferma(app_pronta, monkeypatch):
     assert not at.exception
     [errore] = valori(at.error)
     assert errore.startswith("**Non riesco a raggiungere il database.**")
-    assert not at.button and not at.dataframe
+    assert not at.main.button and not at.dataframe
 
 
 def test_se_lo_storico_non_si_legge_il_modulo_resta(ambiente):

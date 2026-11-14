@@ -313,7 +313,7 @@ def test_lapiario_attivo_e_una_chiave_dello_stato_inizializzata_in_un_punto():
     sorgente = (APP / "avvio.py").read_text(encoding="utf-8")
     assert 'CHIAVE_APIARIO_ATTIVO = "apiario_attivo_id"' in sorgente
     # utente, apiario attivo, esito dell'ultima scrittura (M6-T3)
-    assert sorgente.count("st.session_state.setdefault(") == 3
+    assert sorgente.count("st.session_state.setdefault(") == 5  # + accesso e onboarding (M6-T11)
 
 
 def test_i_due_grep_della_dod_di_m6_t9():

@@ -21,7 +21,7 @@ from anagrafica_finta import (
     anagrafica_di_prova,
     ispezioni_di_prova,
 )
-from app_finta import APP, DashboardFinto, PredittoreStub, installa, valori
+from app_finta import APP, DashboardFinto, PredittoreStub, con_accesso, installa, valori
 from streamlit.testing.v1 import AppTest
 
 from beewatch.exceptions import ValidationError
@@ -52,7 +52,7 @@ def registro(app_pronta, monkeypatch) -> IspezioniInMemoria:
 
 
 def apri() -> AppTest:
-    at = AppTest.from_file(str(APP / "Home.py"), default_timeout=30).run()
+    at = con_accesso(AppTest.from_file(str(APP / "Home.py"), default_timeout=30)).run()
     return at.switch_page(PAGINA).run()
 
 
@@ -329,7 +329,7 @@ def test_senza_apiari_invita_a_crearne_uno(app_pronta, monkeypatch):
 
     assert not at.exception and not at.error
     assert any(t.startswith("Nessun apiario registrato.") for t in valori(at.info))
-    assert not at.button and not at.dataframe
+    assert not at.main.button and not at.dataframe
 
 
 def test_un_apiario_senza_alveari_rimanda_alla_pagina_alveari(registro):
@@ -338,7 +338,7 @@ def test_un_apiario_senza_alveari_rimanda_alla_pagina_alveari(registro):
 
     [vuoto] = [t for t in valori(at.info) if t.startswith("Nessun alveare in Valle.")]
     assert "Alveari" in vuoto
-    assert not at.dataframe and not at.button  # niente form: non c'è un alveare da ispezionare
+    assert not at.dataframe and not at.main.button  # niente form: non c'è un alveare da ispezionare
 
 
 def test_un_apiario_senza_ispezioni_invita_a_registrare_la_prima(app_pronta, monkeypatch):
@@ -363,7 +363,7 @@ def test_con_il_database_spento_la_pagina_lo_dice_e_si_ferma(app_pronta, monkeyp
     [errore] = valori(at.error)
     assert errore.startswith("**Non riesco a raggiungere il database.**")
     assert not any(t.startswith("Nessun apiario") for t in valori(at.info))  # non è vuoto: è giù
-    assert not at.dataframe and not at.button
+    assert not at.dataframe and not at.main.button
 
 
 def test_se_solo_gli_alveari_non_si_leggono_la_pagina_lo_dice(app_pronta, monkeypatch):
@@ -375,7 +375,7 @@ def test_se_solo_gli_alveari_non_si_leggono_la_pagina_lo_dice(app_pronta, monkey
 
     assert not at.exception
     assert any(e.startswith("**Non riesco a raggiungere il database.**") for e in valori(at.error))
-    assert not at.dataframe and not at.button
+    assert not at.dataframe and not at.main.button
 
 
 def test_se_solo_le_ispezioni_non_si_leggono_il_form_resta(app_pronta, monkeypatch):

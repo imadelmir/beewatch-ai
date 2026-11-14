@@ -21,6 +21,7 @@ from app_finta import (
     RADICE,
     ApiariFinti,
     DashboardFinto,
+    con_accesso,
     esegui,
     installa,
     servizi_finti,
@@ -80,7 +81,7 @@ def test_lo_stato_della_sessione_nasce_con_lutente_demo_e_il_primo_apiario(app_p
 
 def test_lapiario_scelto_resta_scelto_se_esiste_ancora(app_pronta, monkeypatch):
     installa(app_pronta, monkeypatch, servizi_finti())
-    at = AppTest.from_file(str(APP / "Home.py"), default_timeout=30)
+    at = con_accesso(AppTest.from_file(str(APP / "Home.py"), default_timeout=30))
     at.session_state["apiario_attivo_id"] = 11  # «Valle»
 
     at.run()
@@ -91,7 +92,7 @@ def test_lapiario_scelto_resta_scelto_se_esiste_ancora(app_pronta, monkeypatch):
 
 def test_lapiario_scelto_che_non_esiste_piu_torna_al_primo(app_pronta, monkeypatch):
     installa(app_pronta, monkeypatch, servizi_finti())
-    at = AppTest.from_file(str(APP / "Home.py"), default_timeout=30)
+    at = con_accesso(AppTest.from_file(str(APP / "Home.py"), default_timeout=30))
     at.session_state["apiario_attivo_id"] = 999
 
     at.run()

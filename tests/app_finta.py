@@ -171,8 +171,20 @@ def installa(avvio, monkeypatch, servizi: Servizi) -> list[int]:
     return create
 
 
+# M6-T11: `Home.py` è il router e mostra le pagine solo dopo l'accesso. I test dell'interfaccia
+# partono con l'accesso già fatto, come l'utente dimostrativo; quelli dell'accesso no
+# (`test_accesso.py`).
+NOME_IN_ACCESSO = "Apicoltore Dimostrativo"
+
+
+def con_accesso(at: AppTest) -> AppTest:
+    at.session_state["accesso"] = NOME_IN_ACCESSO
+    at.session_state["utente_id"] = 1  # l'utente dimostrativo del seed e dei finti
+    return at
+
+
 def esegui(file: Path) -> AppTest:
-    return AppTest.from_file(str(file), default_timeout=30).run()
+    return con_accesso(AppTest.from_file(str(file), default_timeout=30)).run()
 
 
 def naviga(file: Path) -> AppTest:

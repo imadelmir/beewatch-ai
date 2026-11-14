@@ -15,7 +15,7 @@ import ast
 import re
 
 import pytest
-from app_finta import APP, PAGINE, RADICE, installa, servizi_finti, valori
+from app_finta import APP, PAGINE, RADICE, con_accesso, installa, servizi_finti, valori
 from streamlit.testing.v1 import AppTest
 
 from beewatch.exceptions import ModelError
@@ -104,7 +104,7 @@ def test_la_pagina_e_nel_menu_principale():
 
 
 def apri() -> AppTest:
-    return AppTest.from_file(str(PAGINA), default_timeout=30).run()
+    return con_accesso(AppTest.from_file(str(PAGINA), default_timeout=30)).run()
 
 
 def test_lavvertenza_sul_veterinario_e_in_cima(app_pronta, monkeypatch):
