@@ -9,17 +9,20 @@ from __future__ import annotations
 
 import base64
 import html
+import io
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import tema
 from streamlit.delta_generator import DeltaGenerator
-from ui import formatta_numero, stile_figura
+from ui import etichetta_rischio, formatta_numero, stile_figura, stile_stato
 
+from beewatch.models import LivelloRischio, StatoAlveare
 from beewatch.services import MESI
 
 # --------------------------------------------------------------------------- #
@@ -71,17 +74,21 @@ def scheda_kpi(
     variazione: str | None = None,
     aiuto: str | None = None,
     evidenzia: bool = False,
+    tono: str | None = None,
 ) -> None:
     """Una card del mockup: etichetta, icona in alto a destra, numero grande, una riga sotto.
 
     È un `st.metric` vero (si legge anche senza lo stile): `variazione` è la parte verde
     («+2»), `nota` il resto («questo mese»). Con `evidenzia` il valore è nel giallo del tema
-    (lo «Stato generale» del mockup).
+    (lo «Stato generale» del mockup); con `tono` («attenzione», «critico», «successo») nel
+    colore di quel significato, come «Scarse» in rosso nel dettaglio di un alveare.
     """
     testo = valore if isinstance(valore, str) else formatta_numero(valore)
     if unita and testo != "—":
         testo = f"{testo} {unita}"
-    chiave = f"bw_kpi_{icona}" + ("_evidenza" if evidenzia else "")
+    # il valore nel giallo del tema (evidenzia) o nel colore di un tono: attenzione, critico
+    suffisso = "_evidenza" if evidenzia else f"_tono_{tono}" if tono else ""
+    chiave = f"bw_kpi_{icona}{suffisso}"
     with st.container(key=chiave):
         st.metric(
             etichetta,
@@ -93,6 +100,40 @@ def scheda_kpi(
             help=aiuto,
             border=True,
         )
+
+
+# --------------------------------------------------------------------------- #
+# Pastiglie di stato (mockup: Sano, Attenzione, Critico)
+# --------------------------------------------------------------------------- #
+
+# Il gruppo di colore di ogni stato: il testo resta quello preciso dello stato («Debole»).
+GRUPPI_STATO = {
+    StatoAlveare.IN_SALUTE: "sano",
+    StatoAlveare.IN_OSSERVAZIONE: "attenzione",
+    StatoAlveare.DEBOLE: "attenzione",
+    StatoAlveare.SCIAMATO: "attenzione",
+    StatoAlveare.MORTO: "critico",
+}
+GRUPPI_RISCHIO = {
+    LivelloRischio.NESSUNO: "sano",
+    LivelloRischio.BASSO: "sano",
+    LivelloRischio.MEDIO: "attenzione",
+    LivelloRischio.ALTO: "critico",
+}
+
+
+def pastiglia_stato(stato: StatoAlveare) -> str:
+    """La pastiglia dello stato di un alveare, come HTML (per le righe delle tabelle)."""
+    return _pastiglia(stile_stato(stato)[0], GRUPPI_STATO.get(stato, "neutro"))
+
+
+def pastiglia_rischio(livello: LivelloRischio) -> str:
+    """La pastiglia del rischio di un'ispezione («Rischio medio»), come HTML."""
+    return _pastiglia(etichetta_rischio(livello), GRUPPI_RISCHIO.get(livello, "neutro"))
+
+
+def _pastiglia(testo: str, gruppo: str) -> str:
+    return f'<span class="bw-badge {gruppo}">{html.escape(testo)}</span>'
 
 
 # --------------------------------------------------------------------------- #
@@ -234,4 +275,60 @@ def disegna(figura: go.Figure, chiave: str) -> None:
     """Una figura a tutta larghezza della card, senza la barra degli strumenti di Plotly."""
     st.plotly_chart(
         figura, width="stretch", theme=None, key=chiave, config={"displayModeBar": False}
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Esporta (il bottone in cima alle tabelle)
+# --------------------------------------------------------------------------- #
+
+
+def csv_per_excel(tabella: pd.DataFrame) -> bytes:
+    """Una tabella in CSV come lo apre Excel in italiano: «;», virgola decimale, BOM UTF-8."""
+    testo = io.StringIO()
+    tabella.to_csv(testo, sep=";", decimal=",", index=False)
+    return ("\ufeff" + testo.getvalue()).encode("utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# Pezzi delle tabelle e dei dettagli (Alveari, Ispezioni)
+# --------------------------------------------------------------------------- #
+
+
+def intestazione_tabella(colonne: Sequence[str]) -> None:
+    """La riga grigia dei nomi delle colonne, sopra le righe della tabella."""
+    celle = "".join(f"<span>{html.escape(c)}</span>" for c in colonne)
+    st.html(f'<div class="bw-tabella-testa">{celle}</div>')
+
+
+def mostra_pastiglia_stato(stato: StatoAlveare) -> None:
+    st.html(pastiglia_stato(stato))
+
+
+def mostra_pastiglia_rischio(livello: LivelloRischio) -> None:
+    st.html(pastiglia_rischio(livello))
+
+
+def icona_tonda_avviso() -> None:
+    """Il «!» rosso nel cerchio, in cima a una finestra che chiede di confermare."""
+    st.html('<div class="bw-avviso-tondo">!</div>')
+
+
+def icona_vuoto() -> None:
+    """L'esagono giallo dello stato vuoto (mockup «Nessun alveare registrato»)."""
+    st.html('<div class="bw-vuoto-icona">⬡</div>')
+
+
+def barra_rischio(nome: str, livello: int, etichetta: str) -> None:
+    """Una barra di «Salute e rischi»: verde sotto 50, arancio fino a 75, rossa oltre.
+
+    `livello` va da 0 a 100; `etichetta` dice il valore a parole (il colore non basta).
+    """
+    tono = "critico" if livello >= 75 else "attenzione" if livello >= 50 else "successo"
+    larghezza = max(0, min(100, int(livello)))
+    st.html(
+        f'<div class="bw-barra"><div class="bw-barra-testa"><span>{html.escape(nome)}</span>'
+        f"<span>{html.escape(etichetta)}</span></div>"
+        f'<div class="bw-barra-fondo"><span class="{tono}" style="width:{larghezza}%"></span>'
+        "</div></div>"
     )

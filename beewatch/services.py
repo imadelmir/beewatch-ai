@@ -199,6 +199,46 @@ class AlveareInElenco:
     peso_kg: float | None  # il peso registrato nell'ultima ispezione
 
 
+# La forza della colonia e le scorte, come le chiama il mockup, ricavate dai telaini contati
+# all'ultima ispezione (arnia da 10 telaini). Le soglie sono una regola pratica, dichiarata
+# nella pagina Alveari: non una misura.
+SOGLIE_FORZA = ((6, "Alta"), (3, "Media"), (0, "Bassa"))  # telaini di covata
+SOGLIE_SCORTE = ((4, "Buone"), (2, "Medie"), (0, "Scarse"))  # telaini di scorte
+
+
+def classifica_telaini(telaini: int | None, soglie: tuple[tuple[int, str], ...]) -> str | None:
+    """La parola per un numero di telaini («Alta», «Scarse»…); None se non è stato contato."""
+    if telaini is None:
+        return None
+    return next(parola for minimo, parola in soglie if telaini >= minimo)
+
+
+@dataclass(frozen=True)
+class RigaAlveare:
+    """Una riga della tabella Alveari (mockup): l'alveare, il suo apiario e l'ultima ispezione."""
+
+    id: int
+    apiario_id: int
+    apiario: str
+    codice: str
+    stato: StatoAlveare
+    data_installazione: date | None
+    anno_regina: int | None
+    note: str | None
+    ultima_ispezione: date | None
+    peso_kg: float | None
+    telaini_covata: int | None
+    telaini_scorte: int | None
+
+    @property
+    def forza(self) -> str | None:
+        return classifica_telaini(self.telaini_covata, SOGLIE_FORZA)
+
+    @property
+    def scorte(self) -> str | None:
+        return classifica_telaini(self.telaini_scorte, SOGLIE_SCORTE)
+
+
 @dataclass(frozen=True)
 class IspezioneInElenco:
     """Una riga dello storico delle ispezioni, con il codice dell'alveare a cui si riferisce."""
@@ -995,6 +1035,45 @@ class Servizi:
                 )  # fmt: skip
             )
         return sorted(elenco, key=lambda a: a.codice)
+
+    def elenco_alveari(self, utente_id: int) -> list[RigaAlveare]:
+        """Gli alveari attivi di tutti gli apiari dell'utente, per apiario e codice (mockup).
+
+        Ogni riga ha il nome dell'apiario, data e peso dell'ultima ispezione e i telaini di covata e
+        di scorte dell'ultima ispezione che li ha contati: da questi «Forza» e «Scorte di miele».
+
+        Raises:
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        nomi = {a.id: a.nome for a in self._apiari.elenca(utente)}
+        righe = []
+        for alveare in self._alveari.trova_alveari_attivi(utente):
+            if alveare.apiario_id not in nomi:
+                continue
+            ispezioni = sorted(
+                self._ispezioni.ispezioni_per_alveare(utente, alveare.id),
+                key=lambda i: (i.data_ispezione, i.id or 0), reverse=True,
+            )  # fmt: skip
+            ultima = ispezioni[0] if ispezioni else None
+            # i telaini dell'ultima ispezione in cui sono stati contati (non sempre si contano)
+            covata = next((i.telaini_covata for i in ispezioni if i.telaini_covata is not None),
+                          None)  # fmt: skip
+            scorte = next((i.telaini_scorte for i in ispezioni if i.telaini_scorte is not None),
+                          None)  # fmt: skip
+            righe.append(
+                RigaAlveare(
+                    id=alveare.id, apiario_id=alveare.apiario_id,
+                    apiario=nomi[alveare.apiario_id], codice=alveare.codice,
+                    stato=alveare.stato, data_installazione=alveare.data_installazione,
+                    anno_regina=alveare.anno_regina, note=alveare.note,
+                    ultima_ispezione=ultima.data_ispezione if ultima else None,
+                    peso_kg=None if ultima is None or ultima.peso_kg is None
+                    else float(ultima.peso_kg),
+                    telaini_covata=covata, telaini_scorte=scorte,
+                )  # fmt: skip
+            )
+        return sorted(righe, key=lambda r: (r.apiario, r.codice))
 
     def crea_alveare(
         self,
