@@ -116,12 +116,45 @@ def _favo(colore: str) -> str:
     return f'url("data:image/svg+xml,{quote(svg)}")'
 
 
+# Le icone a linea delle card del mockup (tracciati SVG 24x24), colorate con l'accento del tema.
+ICONE = {
+    "alveare": '<path d="M4 10a8 8 0 0 1 16 0v9H4z"/><path d="M4 14h16M8 19v-3h8v3M12 4v2"/>',
+    "ispezioni": '<rect x="5" y="4" width="14" height="17" rx="2"/>'
+    '<path d="M9 4V3h6v1M9 12l2 2 4-4"/>',
+    "miele": '<path d="M8 3h8M9 3v3l-2 3v10a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9l-2-3V3"/>'
+    '<path d="M7 13h10"/>',
+    "salute": '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>'
+    '<path d="M7 12h3l1-2 2 4 1-2h3"/>',
+    "calendario": '<rect x="4" y="5" width="16" height="15" rx="2"/>'
+    '<path d="M4 10h16M9 3v4M15 3v4"/>',
+    "avviso": '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/>',
+    "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+    "fatto": '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+    "chat": '<path d="M5 5h14v10H9l-4 4z"/>',
+}
+
+
+def icona_svg(nome: str, colore: str, misura: int = 24) -> str:
+    """L'SVG di un'icona del mockup, completo, nel colore dato."""
+    return (
+        f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='{misura}' "
+        f"height='{misura}' fill='none' stroke='{colore}' stroke-width='1.7' "
+        f"stroke-linecap='round' stroke-linejoin='round'>{ICONE[nome]}</svg>"
+    )
+
+
+def _url_svg(svg: str) -> str:
+    return f'url("data:image/svg+xml,{quote(svg)}")'
+
+
 def variabili(tema: Tema) -> str:
     """Le variabili CSS `--bw-*` del tema, pronte per `:root`."""
     colori = PALETTE[tema]
     righe = [f"--bw-{nome}: {valore};" for nome, valore in colori.items()]
     righe.append(f"--bw-favo: {_favo(colori['favo'])};")
     righe.append(f"--bw-favo-forte: {_favo(colori['favo-forte'])};")
+    for nome in ICONE:  # --bw-icona-alveare, …: le icone delle card, nel giallo del tema
+        righe.append(f"--bw-icona-{nome}: {_url_svg(icona_svg(nome, colori['accento']))};")
     righe.append(
         f"--bw-alone: radial-gradient(ellipse 60% 50% at 100% 0%, {colori['alone']}, transparent);"
     )

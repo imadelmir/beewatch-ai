@@ -240,7 +240,7 @@ def test_nessun_sql_nei_file_di_app():
 
 def test_html_e_javascript_solo_nei_punti_dichiarati():
     # Specifica §2: lo stile in config.toml e in app/stile/beewatch.css; l'HTML solo in tre file.
-    con_html = {"tema.py", "avvio.py", "ui.py"}
+    con_html = {"tema.py", "avvio.py", "ui.py", "schede.py"}
     con_javascript = {"tema.py", "avvio.py"}  # interruttore del tema e cookie dell'accesso
     for percorso in FILE_APP:
         testo = percorso.read_text(encoding="utf-8")

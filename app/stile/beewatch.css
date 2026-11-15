@@ -511,3 +511,177 @@ section[data-testid="stSidebar"] {
 [data-testid="stCheckbox"] label > div:first-of-type {
   border-color: var(--bw-testo2);
 }
+
+/* ---------------------------------------------------------------- testata delle pagine */
+
+.st-key-bw_testata h1 {
+  padding-bottom: 0.15rem;
+}
+
+.st-key-bw_testata [data-testid="stCaptionContainer"] p {
+  font-size: 0.95rem;
+}
+
+.bw-pillola-data {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 1rem;
+  background: var(--bw-superficie);
+  border: 1px solid var(--bw-bordo);
+  border-radius: 12px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--bw-testo);
+}
+
+/* ---------------------------------------------------------------- card dei numeri (KPI) */
+
+[class*="st-key-bw_kpi_"] [data-testid="stMetric"] {
+  position: relative;
+  min-height: 122px;
+}
+
+[class*="st-key-bw_kpi_"] [data-testid="stMetric"]::after {
+  content: "";
+  position: absolute;
+  top: 1.05rem;
+  right: 1.15rem;
+  width: 30px;
+  height: 30px;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.st-key-bw_kpi_alveare [data-testid="stMetric"]::after { background-image: var(--bw-icona-alveare); }
+.st-key-bw_kpi_ispezioni [data-testid="stMetric"]::after { background-image: var(--bw-icona-ispezioni); }
+.st-key-bw_kpi_miele [data-testid="stMetric"]::after { background-image: var(--bw-icona-miele); }
+[class*="st-key-bw_kpi_salute"] [data-testid="stMetric"]::after { background-image: var(--bw-icona-salute); }
+
+[class*="st-key-bw_kpi_"] [data-testid="stMetricValue"] {
+  font-size: 2.1rem;
+  line-height: 1.2;
+}
+
+[class*="_evidenza"] [data-testid="stMetricValue"] {
+  color: var(--bw-accento);
+}
+
+[class*="st-key-bw_kpi_"] [data-testid="stMetricDelta"] {
+  font-size: 0.8rem;
+  background: transparent;
+  padding-left: 0;
+}
+
+/* ---------------------------------------------------------------- card delle sezioni */
+
+[class*="st-key-bw_card_"] {
+  background: var(--bw-superficie);
+  border: 1px solid var(--bw-bordo);
+  border-radius: 16px;
+  box-shadow: var(--bw-ombra);
+  padding: 1.25rem 1.5rem;
+}
+
+.bw-titolo-card {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--bw-testo);
+}
+
+.bw-titolo-card-nota {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--bw-testo2);
+  margin-left: 0.4rem;
+}
+
+.bw-elenco,
+.bw-legenda {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.bw-elenco li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--bw-bordo);
+  font-size: 0.9rem;
+  color: var(--bw-testo);
+}
+
+.bw-elenco.con-icone li {
+  border-bottom: none;
+  padding: 0.55rem 0;
+}
+
+.bw-elenco li:last-child {
+  border-bottom: none;
+}
+
+.bw-voce-testo {
+  flex: 1;
+}
+
+.bw-voce-destra {
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--bw-testo2);
+  white-space: nowrap;
+}
+
+.bw-legenda li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  font-weight: 500;
+  color: var(--bw-testo);
+}
+
+.bw-pallino {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* i bottoni in fondo alle card: bordati di giallo, come nel mockup */
+[class*="st-key-bw_card_"] [data-testid="stBaseButton-secondary"] {
+  border-color: var(--bw-accento);
+  color: var(--bw-accento-testo);
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------- «Hai bisogno di aiuto?» */
+
+.st-key-bw_aiuto {
+  position: fixed;
+  right: 2rem;
+  bottom: 1.5rem;
+  z-index: 50;
+  width: 320px;
+  padding: 0.6rem 0.8rem 0.6rem 1.1rem;
+  background: var(--bw-superficie);
+  border: 1.5px solid var(--bw-accento);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.25);
+}
+
+.st-key-bw_aiuto p {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.st-key-bw_aiuto button {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bw-accento);
+  color: #1E1A12;
+}

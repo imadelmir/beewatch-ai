@@ -16,6 +16,7 @@ from accesso_finto import (
 )
 from anagrafica_finta import DATABASE_SPENTO, anagrafica_di_prova, ispezioni_di_prova
 from app_finta import APP, DashboardFinto, PredittoreStub, installa, valori
+from assistente_finto import RaccoltiVuoti
 from preferenze_finte import PreferenzeInMemoria
 from streamlit.testing.v1 import AppTest
 
@@ -33,7 +34,7 @@ def utenti(app_pronta, monkeypatch) -> UtentiInMemoria:
         app_pronta,
         monkeypatch,
         Servizi(None, utenti=utenti, apiari=apiari, alveari=alveari,
-                sessioni=SessioniInMemoria(utenti),
+                sessioni=SessioniInMemoria(utenti), raccolti=RaccoltiVuoti(),
                 dashboard=DashboardFinto(), crea_predittore=PredittoreStub,
                 preferenze=PreferenzeInMemoria(), ispezioni=ispezioni_di_prova(alveari)),
     )  # fmt: skip
@@ -73,9 +74,7 @@ def in_accedi(at: AppTest) -> bool:
 
 
 def nella_home(at: AppTest) -> bool:
-    return valori(at.title) == ["🐝 BeeWatch AI"] and "Alveari attivi" in [
-        m.label for m in at.metric
-    ]
+    return valori(at.title) == ["Dashboard"] and "Alveari attivi" in [m.label for m in at.metric]
 
 
 # --------------------------------------------------------------------------- #

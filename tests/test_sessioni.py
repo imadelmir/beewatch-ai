@@ -14,6 +14,7 @@ import pytest
 from accesso_finto import EMAIL_DEMO, GIRI_TEST, PASSWORD_DEMO, SessioniInMemoria, UtentiInMemoria
 from anagrafica_finta import DATABASE_SPENTO, anagrafica_di_prova, ispezioni_di_prova
 from app_finta import APP, DashboardFinto, PredittoreStub, installa
+from assistente_finto import RaccoltiVuoti
 from preferenze_finte import PreferenzeInMemoria
 from streamlit.testing.v1 import AppTest
 
@@ -114,7 +115,8 @@ def ambiente(app_pronta, monkeypatch) -> Ambiente:
     sessioni = SessioniInMemoria(utenti)
     s = Servizi(None, utenti=utenti, sessioni=sessioni, apiari=apiari, alveari=alveari,
                 ispezioni=ispezioni_di_prova(alveari), dashboard=DashboardFinto(),
-                crea_predittore=PredittoreStub, preferenze=PreferenzeInMemoria())  # fmt: skip
+                crea_predittore=PredittoreStub, preferenze=PreferenzeInMemoria(),
+                raccolti=RaccoltiVuoti())  # fmt: skip
     installa(app_pronta, monkeypatch, s)
     return Ambiente(utenti, sessioni, s)
 
