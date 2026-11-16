@@ -201,6 +201,13 @@ def elenco_alveari(utente_id: int) -> tuple[RigaAlveare, ...]:
 
 @st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
 @_interruttore
+def elenco_ispezioni(utente_id: int) -> tuple[IspezioneInElenco, ...]:
+    """Le ispezioni di tutti gli apiari, dalla più recente (tabella Ispezioni, in cache)."""
+    return tuple(servizi().elenco_ispezioni(utente_id))
+
+
+@st.cache_data(ttl=TTL_LETTURE_SECONDI, show_spinner=False)
+@_interruttore
 def alveari_dell_apiario(utente_id: int, apiario_id: int) -> tuple[AlveareInElenco, ...]:
     """Gli alveari attivi di un apiario, con l'ultima ispezione (sola lettura, in cache)."""
     return tuple(servizi().alveari_dell_apiario(utente_id, apiario_id))

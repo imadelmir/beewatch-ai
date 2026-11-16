@@ -23,6 +23,7 @@ import streamlit as st
 from avvio import (
     CHIAVE_UTENTE,
     alveari_dell_apiario,
+    apri_finestra,
     avvia,
     dashboard_apiario,
     modello,
@@ -72,6 +73,7 @@ with azioni:
     if nuova.button(
         "Nuova ispezione", type="primary", icon=":material/add:", key="home_nuova_ispezione"
     ):
+        apri_finestra("nuova_ispezione")  # la pagina Ispezioni si apre sul modulo
         st.switch_page("pages/2_Ispezioni.py")
 
 try:

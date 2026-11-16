@@ -1184,6 +1184,36 @@ class Servizi:
                     storico.append(_in_elenco(ispezione, alveare.codice))
         return sorted(storico, key=lambda i: (i.data_ispezione, i.id), reverse=True)
 
+    def elenco_ispezioni(self, utente_id: int) -> list[IspezioneInElenco]:
+        """Le ispezioni degli alveari attivi di tutti gli apiari dell'utente, dalla più recente.
+
+        È la tabella della pagina Ispezioni (mockup): i filtri li applica la pagina.
+
+        Raises:
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        suoi = {a.id for a in self._apiari.elenca(utente)}
+        storico = [
+            _in_elenco(ispezione, alveare.codice)
+            for alveare in self._alveari.trova_alveari_attivi(utente)
+            if alveare.apiario_id in suoi
+            for ispezione in self._ispezioni.ispezioni_per_alveare(utente, alveare.id)
+        ]
+        return sorted(storico, key=lambda i: (i.data_ispezione, i.id), reverse=True)
+
+    def elimina_ispezione(self, utente_id: int, ispezione_id: int) -> None:
+        """Cancella un'ispezione dell'utente, per sempre (con il suo riepilogo AI, a cascata).
+
+        Raises:
+            ValidationError: l'ispezione non c'è o non è dell'utente.
+            DatabaseError: il database non risponde.
+        """
+        utente = _id_positivo(utente_id, "utente_id", obbligatorio=True)
+        ispezione = _id_positivo(ispezione_id, "ispezione_id", obbligatorio=True)
+        self._ispezioni.elimina(utente, ispezione)
+        logger.info("Ispezione %s cancellata dall'utente %s", ispezione, utente)
+
     def registra_ispezione(
         self,
         utente_id: int,

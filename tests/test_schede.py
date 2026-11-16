@@ -148,4 +148,4 @@ def test_nuova_ispezione_porta_alla_pagina_ispezioni(app_pronta, monkeypatch):
     at = at.button(key="home_nuova_ispezione").click().run()
 
     assert not at.exception
-    assert any("Ispezioni" in t for t in valori(at.title))
+    assert valori(at.title) == ["Nuova ispezione"]  # si apre direttamente il modulo

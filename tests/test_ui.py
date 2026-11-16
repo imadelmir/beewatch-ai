@@ -135,7 +135,8 @@ def test_i_parametri_facoltativi_sono_quelli_della_specifica(ui):
 @pytest.mark.parametrize("helper", USATE_DA_TUTTE)
 def test_le_quattro_funzioni_comuni_sono_usate_da_ogni_schermata(schermata, helper):
     # Le card del mockup (`schede.py`) fanno le veci di intestazione e metrica dove ci sono.
-    equivalenti = {"intestazione": {"testata"}, "metrica": {"scheda_kpi"}}
+    # Nelle pagine-tabella (Alveari, Ispezioni) il numero di contesto è «Mostrando N di M».
+    equivalenti = {"intestazione": {"testata"}, "metrica": {"scheda_kpi", "intestazione_tabella"}}
     chiamate = set(nomi_chiamati(schermata))
     assert helper in chiamate or chiamate & equivalenti.get(helper, set())
 
@@ -764,7 +765,7 @@ def test_ogni_pagina_con_dati_ha_intestazione_e_un_numero_di_contesto(
     assert not at.exception
     assert len(at.title) == 1 and len(at.markdown) >= 1  # titolo e riga di contesto
     assert not at.error
-    if pagina.name == "1_Alveari.py":  # mockup: una tabella, non delle metriche
+    if pagina.name in ("1_Alveari.py", "2_Ispezioni.py"):  # mockup: una tabella, non metriche
         assert any("bw-tabella-testa" in e.proto.body for e in at.get("html"))
         return
     assert at.metric

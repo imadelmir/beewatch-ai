@@ -295,10 +295,15 @@ def csv_per_excel(tabella: pd.DataFrame) -> bytes:
 # --------------------------------------------------------------------------- #
 
 
-def intestazione_tabella(colonne: Sequence[str]) -> None:
-    """La riga grigia dei nomi delle colonne, sopra le righe della tabella."""
+def intestazione_tabella(colonne: Sequence[str], larghezze: Sequence[float]) -> None:
+    """La riga grigia dei nomi delle colonne, sopra le righe della tabella.
+
+    `larghezze` sono le stesse proporzioni di `st.columns` delle righe: così i nomi stanno
+    sopra i valori.
+    """
     celle = "".join(f"<span>{html.escape(c)}</span>" for c in colonne)
-    st.html(f'<div class="bw-tabella-testa">{celle}</div>')
+    griglia = " ".join(f"{float(x):g}fr" for x in larghezze)
+    st.html(f'<div class="bw-tabella-testa" style="grid-template-columns:{griglia}">{celle}</div>')
 
 
 def mostra_pastiglia_stato(stato: StatoAlveare) -> None:

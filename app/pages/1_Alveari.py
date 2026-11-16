@@ -409,7 +409,7 @@ def vista_elenco(righe) -> None:
         pagina = min(pagina, pagine)
         mostrate = scelte[(pagina - 1) * RIGHE_PER_PAGINA : pagina * RIGHE_PER_PAGINA]
 
-        intestazione_tabella(INTESTAZIONI)
+        intestazione_tabella(INTESTAZIONI, COLONNE)
         if not mostrate:
             st.caption("Nessun alveare corrisponde alla ricerca o ai filtri.")
         for riga in mostrate:
@@ -493,6 +493,7 @@ def vista_dettaglio(riga) -> None:
                         args=("modifica_alveare", riga.id))  # fmt: skip
         if nuova.button("Nuova ispezione", type="primary", key="dettaglio_nuova_ispezione",
                         icon=":material/add:", width="stretch"):  # fmt: skip
+            apri_finestra("nuova_ispezione", riga.id)  # il modulo, con questo alveare già scelto
             st.switch_page("pages/2_Ispezioni.py")
     if esito:
         st.success(esito, icon="✅")
