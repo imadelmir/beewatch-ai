@@ -201,6 +201,13 @@ class IspezioniInMemoria:
         self.righe[nuova.id] = nuova
         return nuova
 
+    def elimina(self, utente_id: int, ispezione_id: int) -> None:
+        """Come il repository: solo un'ispezione di un alveare dell'utente, altrimenti errore."""
+        self._prova()
+        if self.trova(utente_id, ispezione_id) is None:
+            raise ValidationError("Ispezione non trovata.", campo="id")
+        del self.righe[ispezione_id]
+
     def trova(self, utente_id: int, ispezione_id: int) -> Ispezione | None:
         self._prova()
         ispezione = self.righe.get(ispezione_id)

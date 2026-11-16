@@ -1,58 +1,71 @@
 """
-BeeWatch AI - pagina Ispezioni: il registro delle visite all'arnia (M6-T4).
+BeeWatch AI - pagina Ispezioni (M6-T4; aspetto del mockup, tavole 25–29).
 
-L'anatomia del §6 della specifica:
+Due viste, come nel mockup:
 
-- **controlli**: il modulo «Registra un'ispezione» (campi strutturati e note libere) e i filtri
-  dello storico (alveare, intervallo di date);
-- **contenuto**: tre metriche, la tabella dello storico dalla più recente e la scheda di una
-  ispezione, con le note complete e il collegamento all'alveare;
-- **note** in fondo.
+- **lo storico**: la tabella delle ispezioni di tutti gli alveari, dalla più recente, con ricerca,
+  filtri per alveare, rischio e periodo, Esporta in CSV, pastiglia del rischio, Forza e Scorte
+  (dai telaini contati), regina vista, peso e le azioni: leggere l'ispezione intera, eliminarla;
+- **la nuova ispezione** a tutta pagina: alveare, data, rischio rilevato, telaini di covata e di
+  scorte, regina, sciamatura, peso e le note di campo.
 
-Le note sono la materia prima dell'assistente AI (M6-T6): si salvano come sono state scritte, senza
-tagli, e si rileggono in un campo di sola lettura, che non interpreta asterischi o trattini come
-formattazione. La pagina non scrive nel database: controlla i campi che vede (alveare e data
-obbligatori) e chiama i servizi; le altre regole (data non futura, intervalli, lunghezza delle
-note) stanno nel modello `Ispezione` e arrivano con `mostra_errore` e il nome del campo.
+Le note sono la materia prima dell'assistente AI: si salvano come sono state scritte e si leggono
+intere, in un campo di sola lettura che non interpreta asterischi o trattini. Del mockup mancano
+operatore, temperatura, «Salva bozza» e «Compila con AI»: l'app non li ha. Modificare
+un'ispezione non è previsto (si elimina e si registra di nuovo). La pagina non scrive nel database:
+chiama i servizi; le regole (data non futura, intervalli, lunghezza delle note) sono nel modello.
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
+import pandas as pd
 import streamlit as st
 from avvio import (
     CHIAVE_UTENTE,
-    alveari_dell_apiario,
     apiari,
+    apri_finestra,
     avvia,
-    ispezioni_dell_apiario,
+    chiudi_finestra,
+    elenco_alveari,
+    elenco_ispezioni,
+    finestra_aperta,
+    mostra_alveare,
     prendi_esito,
     scrittura_riuscita,
+)
+from schede import (
+    csv_per_excel,
+    icona_tonda_avviso,
+    intestazione_tabella,
+    mostra_pastiglia_rischio,
+    pillola_data,
+    testata,
 )
 from ui import (
     AZIONE_NESSUN_APIARIO,
     DATO_MANCANTE,
     NESSUN_APIARIO,
-    badge_stato,
     blocco_vuoto,
     etichetta_rischio,
     formatta_data,
     formatta_numero,
-    intestazione,
-    metrica,
     mostra_errore,
     sidebar,
 )
 
 from beewatch.exceptions import BeeWatchError, ValidationError
 from beewatch.models import CHILI_MASSIMI, TELAINI_MASSIMI, LivelloRischio
+from beewatch.services import SOGLIE_FORZA, SOGLIE_SCORTE, classifica_telaini
 
 LIVELLI = list(LivelloRischio)
-RISCHIO_DA_SEGNALARE = {LivelloRischio.MEDIO, LivelloRischio.ALTO}
-TUTTI = 0  # nel filtro: nessun alveare scelto
-ANTEPRIMA_NOTE = 80  # caratteri delle note mostrati nella tabella
 OGGI = date.today()
+RIGHE_PER_PAGINA = 10
+TUTTI = "Tutti"
+PERIODI = {"Tutto": None, "Ultimi 30 giorni": 30, "Ultimi 90 giorni": 90, "Ultimo anno": 365}
+COLONNE = [1.3, 1.2, 1.8, 1.0, 1.0, 0.9, 1.1, 1.1]
+INTESTAZIONI = ("Data", "Alveare", "Stato", "Forza", "Scorte", "Regina", "Peso", "Azioni")
 
 
 def problemi_ispezione(campi: dict) -> list[ValidationError]:
@@ -62,135 +75,307 @@ def problemi_ispezione(campi: dict) -> list[ValidationError]:
     return []
 
 
-def campi_ispezione(codici: dict[int, str], preferito: int | None) -> dict:
-    """I campi di una nuova ispezione dentro il form; `preferito` è l'alveare proposto."""
-    alveari = list(codici)
-    campi = {}
-    colonne = st.columns(3)
-    campi["alveare_id"] = colonne[0].selectbox(
-        "Alveare *",
-        options=alveari,
-        index=alveari.index(preferito) if preferito in codici else 0,
-        format_func=codici.__getitem__,
-        # Streamlit ricorda il valore per chiave e ignorerebbe il nuovo `index`: con la chiave
-        # legata al filtro, cambiare il filtro cambia anche l'alveare proposto.
-        key=f"ispezione_alveare_{preferito or 'tutti'}",
-    )
-    campi["data_ispezione"] = colonne[1].date_input(
-        "Data *", value=OGGI, max_value=OGGI, format="DD/MM/YYYY", key="ispezione_data"
-    )
-    campi["livello_rischio"] = colonne[2].selectbox(
-        "Rischio rilevato",
-        options=LIVELLI,
-        format_func=etichetta_rischio,
-        key="ispezione_rischio",
-        help="Malattie, parassiti, saccheggio: quanto ti preoccupa quello che hai visto.",
-    )
-    colonne = st.columns(3)
-    peso = colonne[0].number_input(
-        "Peso dell'arnia (kg)",
-        min_value=0.0,
-        max_value=float(CHILI_MASSIMI),
-        value=None,
-        step=0.1,
-        format="%.2f",
-        key="ispezione_peso",
-    )
-    campi["peso_kg"] = None if peso is None else round(peso, 2)
-    campi["telaini_covata"] = colonne[1].number_input(
-        "Telaini di covata",
-        min_value=0,
-        max_value=TELAINI_MASSIMI,
-        value=None,
-        step=1,
-        key="ispezione_covata",
-    )
-    campi["telaini_scorte"] = colonne[2].number_input(
-        "Telaini di scorte",
-        min_value=0,
-        max_value=TELAINI_MASSIMI,
-        value=None,
-        step=1,
-        key="ispezione_scorte",
-    )
-    colonne = st.columns(3)
-    campi["regina_vista"] = colonne[0].checkbox("Regina vista", key="ispezione_regina")
-    campi["sciamatura"] = colonne[1].checkbox("Sciamatura in corso", key="ispezione_sciamatura")
-    campi["note"] = st.text_area(
-        "Note di campo",
-        height=200,
-        key="ispezione_note",
-        placeholder="Cosa hai visto: covata, scorte, comportamento, segni di malattie o "
-        "parassiti, interventi fatti. Scrivi pure a lungo: le note non vengono tagliate.",
-        help="L'assistente AI ne ricava un riepilogo strutturato (pagina Assistente AI).",
-    )
-    return campi
-
-
 def si_no(valore: bool) -> str:
-    return "sì" if valore else "no"
+    return "Sì" if valore else "No"
 
 
-def anteprima(note: str | None) -> str:
-    if not note:
-        return ""
-    riga = " ".join(note.split())
-    return riga if len(riga) <= ANTEPRIMA_NOTE else riga[: ANTEPRIMA_NOTE - 1] + "…"
+def con_kg(valore) -> str:
+    testo = formatta_numero(valore)
+    return testo if testo == DATO_MANCANTE else f"{testo} kg"
 
 
-def riga_tabella(ispezione) -> dict:
-    return {
-        "Data": formatta_data(ispezione.data_ispezione),
-        "Alveare": ispezione.codice_alveare,
-        "Rischio": etichetta_rischio(ispezione.livello_rischio),
-        "Peso (kg)": formatta_numero(ispezione.peso_kg),
-        "Covata": formatta_numero(ispezione.telaini_covata),
-        "Scorte": formatta_numero(ispezione.telaini_scorte),
-        "Regina vista": si_no(ispezione.regina_vista),
-        "Sciamatura": si_no(ispezione.sciamatura),
-        "Note": anteprima(ispezione.note),
-    }
+def chiudi_e_ricarica() -> None:
+    """Chiude la finestra o la vista e riesegue tutta la pagina (un clic in una finestra riesegue
+    solo la finestra)."""
+    chiudi_finestra()
+    st.rerun()
 
 
-def titolo_ispezione(ispezione) -> str:
-    return (
-        f"{formatta_data(ispezione.data_ispezione)} · {ispezione.codice_alveare} · "
-        f"{etichetta_rischio(ispezione.livello_rischio)}"
+# --------------------------------------------------------------------------- #
+# Finestre: leggere ed eliminare un'ispezione
+# --------------------------------------------------------------------------- #
+
+
+@st.dialog("Ispezione", width="large", on_dismiss=chiudi_finestra)
+def finestra_ispezione(ispezione) -> None:
+    st.markdown(
+        f"**Alveare {ispezione.codice_alveare} · {formatta_data(ispezione.data_ispezione)}**"
+    )
+    mostra_pastiglia_rischio(ispezione.livello_rischio)
+    colonne = st.columns(3)
+    colonne[0].caption(f"Peso: {con_kg(ispezione.peso_kg)}")
+    colonne[1].caption(f"Telaini di covata: {formatta_numero(ispezione.telaini_covata)}")
+    colonne[2].caption(f"Telaini di scorte: {formatta_numero(ispezione.telaini_scorte)}")
+    colonne = st.columns(3)
+    colonne[0].caption(f"Regina vista: {si_no(ispezione.regina_vista).lower()}")
+    colonne[1].caption(f"Sciamatura: {si_no(ispezione.sciamatura).lower()}")
+    if ispezione.note:
+        # Sola lettura e testo semplice: le note si leggono come sono state scritte.
+        st.text_area("Note di campo", value=ispezione.note, height=220, disabled=True,
+                     key=f"note_ispezione_{ispezione.id}")  # fmt: skip
+    else:
+        st.caption("Nessuna nota per questa ispezione.")
+    alveare, assistente = st.columns(2)
+    if alveare.button("Vai all'alveare", key=f"vai_alveare_{ispezione.id}", width="stretch",
+                      icon=":material/hive:"):  # fmt: skip
+        chiudi_finestra()
+        mostra_alveare(ispezione.alveare_id)
+        st.switch_page("pages/1_Alveari.py")
+    if assistente.button("Riepilogo con l'assistente", key=f"vai_ai_{ispezione.id}",
+                         width="stretch", icon=":material/smart_toy:"):  # fmt: skip
+        chiudi_finestra()
+        st.switch_page("pages/4_Assistente_AI.py")
+
+
+@st.dialog("Elimina ispezione", on_dismiss=chiudi_finestra)
+def finestra_elimina_ispezione(ispezione) -> None:
+    with st.container(key="bw_conferma_elimina"):
+        icona_tonda_avviso()
+        st.markdown(
+            f"**Eliminare l'ispezione del {formatta_data(ispezione.data_ispezione)} "
+            f"di {ispezione.codice_alveare}?**"
+        )
+        st.caption("Si cancella per sempre, con il suo eventuale riepilogo dell'assistente AI.")
+        annulla, elimina = st.columns(2)
+        if annulla.button("Annulla", key=f"ispezione_{ispezione.id}_annulla", width="stretch"):
+            chiudi_e_ricarica()
+        with elimina, st.container(key="bw_bottone_elimina"):
+            premuto = st.button("Elimina", key=f"ispezione_{ispezione.id}_elimina",
+                                width="stretch", icon=":material/delete:")  # fmt: skip
+    if premuto:
+        try:
+            servizi.elimina_ispezione(utente, ispezione.id)
+        except BeeWatchError as errore:
+            mostra_errore(errore)
+        else:
+            chiudi_finestra()
+            scrittura_riuscita(
+                f"Ispezione del {formatta_data(ispezione.data_ispezione)} di "
+                f"{ispezione.codice_alveare} eliminata."
+            )
+
+
+# --------------------------------------------------------------------------- #
+# Vista: nuova ispezione
+# --------------------------------------------------------------------------- #
+
+
+def vista_nuova(alveari, preferito: int | None) -> None:
+    azioni = testata("Nuova ispezione", "Inserisci i dati dell'ispezione.")
+    with azioni:
+        _, torna = st.columns([1.2, 1])
+        if torna.button("Torna allo storico", key="ispezione_torna", icon=":material/arrow_back:",
+                        width="stretch"):  # fmt: skip
+            chiudi_e_ricarica()
+    if not alveari:
+        blocco_vuoto("Nessun alveare a cui registrare un'ispezione.",
+                     "Aggiungilo nella pagina **Alveari**.")  # fmt: skip
+        return
+    piu_apiari = len({a.apiario for a in alveari}) > 1
+    nomi = {a.id: f"{a.codice} · {a.apiario}" if piu_apiari else a.codice for a in alveari}
+    with st.container(key="bw_card_nuova_ispezione"):
+        st.markdown("**Dati ispezione**")
+        st.caption("I campi con * sono obbligatori. Le note sono quelle che l'assistente AI "
+                   "riassume: scrivi pure a lungo, non vengono tagliate.")  # fmt: skip
+        with st.form("nuova_ispezione", border=False):
+            sinistra, destra = st.columns(2)
+            with sinistra:
+                alveare_id = st.selectbox(
+                    "Alveare *", options=list(nomi), format_func=nomi.__getitem__,
+                    index=list(nomi).index(preferito) if preferito in nomi else 0,
+                    key="ispezione_alveare",
+                )  # fmt: skip
+                giorno = st.date_input("Data ispezione *", value=OGGI, max_value=OGGI,
+                                       format="DD/MM/YYYY", key="ispezione_data")  # fmt: skip
+                rischio = st.selectbox(
+                    "Stato alveare (rischio rilevato)", options=LIVELLI,
+                    format_func=etichetta_rischio, key="ispezione_rischio",
+                    help="Malattie, parassiti, saccheggio: quanto ti preoccupa quello che hai "
+                    "visto.",
+                )  # fmt: skip
+                covata = st.number_input(
+                    "Forza: telaini di covata", min_value=0, max_value=TELAINI_MASSIMI,
+                    value=None, step=1, key="ispezione_covata",
+                    help="Diventa «Forza» nelle tabelle: Alta da 6, Media da 3, Bassa sotto.",
+                )  # fmt: skip
+            with destra:
+                scorte = st.number_input(
+                    "Scorte di miele: telaini di scorte", min_value=0,
+                    max_value=TELAINI_MASSIMI, value=None, step=1, key="ispezione_scorte",
+                    help="Diventa «Scorte» nelle tabelle: Buone da 4, Medie da 2, Scarse sotto.",
+                )  # fmt: skip
+                regina = st.selectbox("Presenza regina", ["No", "Sì"], key="ispezione_regina",
+                                      help="Hai visto la regina?")  # fmt: skip
+                sciamatura = st.selectbox("Sciamatura in corso", ["No", "Sì"],
+                                          key="ispezione_sciamatura")  # fmt: skip
+                peso = st.number_input(
+                    "Peso dell'arnia (kg)", min_value=0.0, max_value=float(CHILI_MASSIMI),
+                    value=None, step=0.1, format="%.2f", key="ispezione_peso",
+                )  # fmt: skip
+            note = st.text_area(
+                "Note", height=160, key="ispezione_note",
+                placeholder="Cosa hai visto: covata, scorte, comportamento, segni di malattie o "
+                "parassiti, interventi fatti.",
+            )  # fmt: skip
+            _, annulla, salva = st.columns([3, 1, 1.4])
+            annullato = annulla.form_submit_button("Annulla", key="ispezione_annulla",
+                                                   width="stretch")  # fmt: skip
+            premuto = salva.form_submit_button(
+                "Salva ispezione", type="primary", key="nuova_ispezione_invia",
+                icon=":material/check_circle:", width="stretch",
+            )  # fmt: skip
+    if annullato:
+        chiudi_e_ricarica()
+    if premuto:
+        campi = {"alveare_id": alveare_id, "data_ispezione": giorno, "livello_rischio": rischio,
+                 "peso_kg": None if peso is None else round(peso, 2),
+                 "telaini_covata": covata, "telaini_scorte": scorte,
+                 "regina_vista": regina == "Sì", "sciamatura": sciamatura == "Sì",
+                 "note": note}  # fmt: skip
+        if problemi := problemi_ispezione(campi):
+            for problema in problemi:
+                mostra_errore(problema)
+            return
+        try:
+            servizi.registra_ispezione(utente, **campi)
+        except BeeWatchError as errore:
+            mostra_errore(errore)
+        else:
+            chiudi_finestra()
+            scrittura_riuscita(
+                f"Ispezione di **{nomi[alveare_id]}** del {formatta_data(giorno)} registrata."
+            )
+
+
+# --------------------------------------------------------------------------- #
+# Vista: lo storico
+# --------------------------------------------------------------------------- #
+
+
+def vista_storico(ispezioni, alveari) -> None:
+    azioni = testata("Ispezioni", "Storico completo delle ispezioni effettuate sui tuoi alveari.")
+    with azioni:
+        data, nuova = st.columns([3, 2], vertical_alignment="center")
+        with data:
+            pillola_data(OGGI)
+        nuova.button(
+            "Nuova ispezione", type="primary", key="apri_nuova_ispezione", icon=":material/add:",
+            on_click=apri_finestra, args=("nuova_ispezione",), disabled=not alveari,
+            help=None if alveari else "Prima serve un alveare: aggiungilo nella pagina Alveari.",
+        )  # fmt: skip
+    if esito:
+        st.success(esito, icon="✅")
+    if not alveari:
+        if not apiari_utente:
+            blocco_vuoto(NESSUN_APIARIO, AZIONE_NESSUN_APIARIO)
+        else:
+            blocco_vuoto("Nessun alveare registrato.", "Aggiungilo nella pagina **Alveari**.")
+        return
+    if not ispezioni:
+        blocco_vuoto("Ancora nessuna ispezione registrata.",
+                     "Registra la prima con **Nuova ispezione**, qui sopra.")  # fmt: skip
+        return
+
+    with st.container(key="bw_card_ispezioni"):
+        cerca, alveare, rischio, periodo, _, esporta = st.columns([2.6, 1.6, 1.6, 1.8, 0.2, 1.1])
+        testo = cerca.text_input(
+            "Cerca", key="ispezioni_cerca", placeholder="Cerca ispezione...",
+            label_visibility="collapsed", icon=":material/search:",
+        )  # fmt: skip
+        codici = sorted({i.codice_alveare for i in ispezioni})
+        filtro_alveare = alveare.selectbox(
+            "Alveare", [TUTTI, *codici], key="ispezioni_filtro_alveare",
+            label_visibility="collapsed", format_func=lambda c: f"Alveare: {c}",
+        )  # fmt: skip
+        filtro_rischio = rischio.selectbox(
+            "Stato", [TUTTI, *LIVELLI], key="ispezioni_filtro_rischio",
+            label_visibility="collapsed",
+            format_func=lambda r: "Stato: Tutti" if r == TUTTI else etichetta_rischio(r),
+        )  # fmt: skip
+        with periodo, st.container(key="bw_periodo"):
+            scelto = st.selectbox("Periodo", list(PERIODI), key="ispezioni_periodo",
+                                  label_visibility="collapsed")  # fmt: skip
+        giorni = PERIODI[scelto]
+        cercato = testo.strip().lower()
+        scelte = [
+            i for i in ispezioni
+            if (not cercato or cercato in (i.note or "").lower()
+                or cercato in i.codice_alveare.lower())
+            and (filtro_alveare == TUTTI or i.codice_alveare == filtro_alveare)
+            and (filtro_rischio == TUTTI or i.livello_rischio == filtro_rischio)
+            and (giorni is None or i.data_ispezione >= OGGI - timedelta(days=giorni))
+        ]  # fmt: skip
+        esporta.download_button(
+            "Esporta", data=csv_ispezioni(scelte), file_name="ispezioni.csv", mime="text/csv",
+            key="ispezioni_esporta", icon=":material/download:", width="stretch",
+        )  # fmt: skip
+
+        pagine = max(1, -(-len(scelte) // RIGHE_PER_PAGINA))
+        pagina = min(st.session_state.get("ispezioni_pagina") or 1, pagine)
+        mostrate = scelte[(pagina - 1) * RIGHE_PER_PAGINA : pagina * RIGHE_PER_PAGINA]
+
+        intestazione_tabella(INTESTAZIONI, COLONNE)
+        if not mostrate:
+            st.caption("Nessuna ispezione corrisponde alla ricerca o ai filtri.")
+        for ispezione in mostrate:
+            with st.container(key=f"bw_riga_{ispezione.id}"):
+                celle = st.columns(COLONNE, vertical_alignment="center")
+                celle[0].markdown(f"**{formatta_data(ispezione.data_ispezione)}**")
+                celle[1].write(ispezione.codice_alveare)
+                with celle[2]:
+                    mostra_pastiglia_rischio(ispezione.livello_rischio)
+                celle[3].write(classifica_telaini(ispezione.telaini_covata, SOGLIE_FORZA) or "—")
+                celle[4].write(classifica_telaini(ispezione.telaini_scorte, SOGLIE_SCORTE)
+                               or "—")  # fmt: skip
+                celle[5].write(si_no(ispezione.regina_vista))
+                celle[6].write(con_kg(ispezione.peso_kg))
+                with celle[7]:
+                    vedi, elimina = st.columns(2)
+                    vedi.button("", key=f"vedi_ispezione_{ispezione.id}",
+                                icon=":material/visibility:", type="tertiary",
+                                help="Leggi l'ispezione intera", on_click=apri_finestra,
+                                args=("ispezione", ispezione.id))  # fmt: skip
+                    with elimina, st.container(key=f"bw_cestino_{ispezione.id}"):
+                        st.button("", key=f"elimina_ispezione_{ispezione.id}",
+                                  icon=":material/delete:", type="tertiary",
+                                  help="Elimina l'ispezione", on_click=apri_finestra,
+                                  args=("elimina_ispezione", ispezione.id))  # fmt: skip
+
+        piede, numeri = st.columns([2, 1], vertical_alignment="center")
+        piede.caption(f"Mostrando {len(mostrate)} di {len(scelte)} ispezioni")
+        if pagine > 1:
+            with numeri, st.container(key="bw_pagine"):
+                st.segmented_control("Pagina", list(range(1, pagine + 1)), default=pagina,
+                                     key="ispezioni_pagina",
+                                     label_visibility="collapsed")  # fmt: skip
+
+    st.caption(
+        "Forza e scorte dai telaini contati in quell'ispezione (arnia da 10): forza Alta da 6 "
+        "telaini di covata, Media da 3; scorte Buone da 4 telaini, Medie da 2. «—» se non sono "
+        "stati contati. La ricerca guarda il codice dell'alveare e le note."
     )
 
 
-def scheda_ispezione(ispezione, alveare) -> None:
-    """Tutta l'ispezione: l'alveare a cui si riferisce, i campi e le note complete."""
-    with st.container(border=True):
-        sinistra, destra = st.columns([2, 3])
-        with sinistra:
-            st.markdown(f"**Alveare {ispezione.codice_alveare}**")
-            badge_stato(alveare.stato if alveare else None)
-            st.page_link(
-                "pages/1_Alveari.py", label="Vai all'alveare nella pagina Alveari", icon="🏠"
-            )
-        with destra:
-            st.markdown(f"**Ispezione del {formatta_data(ispezione.data_ispezione)}**")
-            peso = formatta_numero(ispezione.peso_kg)
-            st.caption(
-                f"{etichetta_rischio(ispezione.livello_rischio)} · "
-                f"peso: {peso if peso == DATO_MANCANTE else peso + ' kg'} · "
-                f"telaini di covata: {formatta_numero(ispezione.telaini_covata)} · "
-                f"telaini di scorte: {formatta_numero(ispezione.telaini_scorte)} · "
-                f"regina vista: {si_no(ispezione.regina_vista)} · "
-                f"sciamatura: {si_no(ispezione.sciamatura)}"
-            )
-        if ispezione.note:
-            # Sola lettura e testo semplice: le note si leggono come sono state scritte.
-            st.text_area(
-                "Note di campo",
-                value=ispezione.note,
-                height=220,
-                disabled=True,
-                key=f"note_ispezione_{ispezione.id}",
-            )
-        else:
-            st.caption("Nessuna nota per questa ispezione.")
+def csv_ispezioni(ispezioni) -> bytes:
+    """Le ispezioni filtrate, in CSV per Excel in italiano, con le note intere."""
+    return csv_per_excel(
+        pd.DataFrame(
+            [
+                {
+                    "Data": formatta_data(i.data_ispezione),
+                    "Alveare": i.codice_alveare,
+                    "Rischio": etichetta_rischio(i.livello_rischio),
+                    "Peso (kg)": i.peso_kg,
+                    "Telaini di covata": i.telaini_covata,
+                    "Telaini di scorte": i.telaini_scorte,
+                    "Regina vista": si_no(i.regina_vista),
+                    "Sciamatura": si_no(i.sciamatura),
+                    "Note": i.note or "",
+                }
+                for i in ispezioni
+            ]  # fmt: skip
+        )
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -198,140 +383,26 @@ def scheda_ispezione(ispezione, alveare) -> None:
 # --------------------------------------------------------------------------- #
 
 servizi = avvia("Ispezioni", "📋")
-attivo = sidebar()
+sidebar()
 utente = st.session_state[CHIAVE_UTENTE]
-
-intestazione(
-    "📋 Ispezioni",
-    "Il registro delle visite all'arnia: covata, scorte, regina, rischio e note di campo.",
-)
-
 esito = prendi_esito()
-if esito:
-    st.success(esito, icon="✅")
 
 try:
-    # La sidebar non solleva: se il database non risponde, è il corpo della pagina a dirlo
-    # (altrimenti l'utente leggerebbe «nessun apiario» invece di «database non raggiungibile»).
-    apiari(utente)
-    alveari = alveari_dell_apiario(utente, attivo.id) if attivo else ()
+    apiari_utente = apiari(utente)
+    alveari = elenco_alveari(utente)
+    ispezioni = elenco_ispezioni(utente)
 except BeeWatchError as errore:
+    testata("Ispezioni", "Storico completo delle ispezioni effettuate sui tuoi alveari.")
     mostra_errore(errore)
     st.stop()
 
-if attivo is None:
-    blocco_vuoto(NESSUN_APIARIO, AZIONE_NESSUN_APIARIO)
-    st.stop()
-
-if not alveari:
-    blocco_vuoto(
-        f"Nessun alveare in {attivo.nome}.",
-        "Vai su **Alveari** per aggiungerne uno: le ispezioni si registrano alveare per alveare.",
-    )
-    st.stop()
-
-codici = {a.id: a.codice for a in alveari}
-alveari_per_id = {a.id: a for a in alveari}
-
-# --------------------------------------------------------------------------- #
-# Controlli: filtri dello storico e nuova ispezione
-# --------------------------------------------------------------------------- #
-
-st.subheader(f"Ispezioni di {attivo.nome}")
-
-filtri = st.columns(3)
-scelto = filtri[0].selectbox(
-    "Alveare",
-    options=[TUTTI, *codici],
-    format_func={TUTTI: "Tutti gli alveari", **codici}.__getitem__,
-    key="filtro_alveare",
-)
-dal = filtri[1].date_input("Dal", value=None, max_value=OGGI, format="DD/MM/YYYY", key="filtro_dal")
-al = filtri[2].date_input("Al", value=None, max_value=OGGI, format="DD/MM/YYYY", key="filtro_al")
-alveare_filtro = None if scelto == TUTTI else scelto
-
-with st.expander("➕ Registra un'ispezione"):
-    with st.form("nuova_ispezione"):
-        campi = campi_ispezione(codici, alveare_filtro)
-        if st.form_submit_button(
-            "Registra l'ispezione", type="primary", key="nuova_ispezione_invia"
-        ):
-            if problemi := problemi_ispezione(campi):
-                for problema in problemi:
-                    mostra_errore(problema)
-            else:
-                try:
-                    nuova = servizi.registra_ispezione(utente, **campi)
-                except BeeWatchError as errore:
-                    mostra_errore(errore)
-                else:
-                    scrittura_riuscita(
-                        f"Ispezione di **{codici[nuova.alveare_id]}** del "
-                        f"{formatta_data(nuova.data_ispezione)} registrata."
-                    )
-
-# --------------------------------------------------------------------------- #
-# Contenuto: metriche, storico, scheda di un'ispezione
-# --------------------------------------------------------------------------- #
-
-try:
-    storico = ispezioni_dell_apiario(utente, attivo.id, alveare_filtro, dal, al)
-except BeeWatchError as errore:
-    mostra_errore(errore)
-    storico = None
-
-if storico is not None:
-    colonne = st.columns(4)
-    with colonne[0]:
-        metrica("Ispezioni mostrate", len(storico), None, aiuto="Quelle che passano i filtri.")
-    with colonne[1]:
-        metrica(
-            "Con rischio medio o alto",
-            sum(i.livello_rischio in RISCHIO_DA_SEGNALARE for i in storico),
-            None,
-            aiuto="Le visite in cui hai segnalato un rischio medio o alto.",
-        )
-    with colonne[2]:
-        metrica(
-            "Ultima ispezione",
-            storico[0].data_ispezione if storico else None,
-            None,
-        )
-
-    filtrato = alveare_filtro is not None or dal is not None or al is not None
-    if not storico and filtrato:
-        blocco_vuoto(
-            "Nessuna ispezione con questi filtri.",
-            "Allarga l'intervallo di date o scegli **Tutti gli alveari**.",
-        )
-    elif not storico:
-        blocco_vuoto(
-            f"Nessuna ispezione registrata in {attivo.nome}.",
-            "Registra la prima con il modulo **Registra un'ispezione** qui sopra.",
-        )
-    else:
-        st.dataframe([riga_tabella(i) for i in storico], hide_index=True, width="stretch")
-
-        per_id = {i.id: i for i in storico}
-        letta = per_id[
-            st.selectbox(
-                "Leggi un'ispezione",
-                options=list(per_id),
-                format_func={i.id: titolo_ispezione(i) for i in storico}.__getitem__,
-                # La chiave cambia con l'elenco: dopo un salvataggio o un filtro il selettore
-                # riparte dalla più recente. Con una chiave fissa il browser mostrava ancora
-                # l'etichetta vecchia mentre la scheda era già quella nuova.
-                key=f"ispezione_da_leggere_{hash(tuple(per_id)) & 0xFFFFFFFF:x}",
-            )
-        ]
-        scheda_ispezione(letta, alveari_per_id.get(letta.alveare_id))
-
-# --------------------------------------------------------------------------- #
-# Note
-# --------------------------------------------------------------------------- #
-
-st.caption(
-    "Lo storico comprende gli alveari attivi dell'apiario scelto nella sidebar, dalla visita più "
-    "recente. Le date si fermano a oggi: un'ispezione nel futuro non si registra. Le note si "
-    "salvano per intero, accenti compresi; la tabella ne mostra solo l'inizio, la scheda tutto."
-)
+per_id = {i.id: i for i in ispezioni}
+nuova = finestra_aperta("nuova_ispezione")
+if nuova is not False:
+    vista_nuova(alveari, None if nuova is True else nuova)
+else:
+    vista_storico(ispezioni, alveari)
+    if (scelta := finestra_aperta("ispezione")) in per_id:
+        finestra_ispezione(per_id[scelta])
+    elif (scelta := finestra_aperta("elimina_ispezione")) in per_id:
+        finestra_elimina_ispezione(per_id[scelta])

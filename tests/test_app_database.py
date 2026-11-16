@@ -62,18 +62,15 @@ def test_la_home_legge_il_seed_dal_database_vero(home_con_database) -> None:
 
 
 def test_le_sei_pagine_partono_con_il_database_vero(home_con_database) -> None:
-    """Ogni pagina aperta dalla Home, come nel browser: solo così `st.page_link` funziona.
-
-    Con i dati del seed la pagina Ispezioni arriva alla scheda di un'ispezione, che ha il
-    collegamento alla pagina Alveari: aperta da sola, AppTest non conosce le altre pagine.
-    """
+    """Ogni pagina aperta dalla Home, come nel browser, con i dati del seed."""
     for pagina in sorted((APP / "pages").glob("*.py")):
         at = con_accesso(AppTest.from_file(str(APP / "Home.py"), default_timeout=60)).run()
         at.switch_page(str(pagina.relative_to(APP))).run()
         assert not at.exception, pagina.name
         assert not at.error, pagina.name
-        if pagina.name == "2_Ispezioni.py":  # lo storico del seed arriva davvero alla pagina
-            assert at.dataframe and len(at.dataframe[0].value) > 0
+        if pagina.name == "2_Ispezioni.py":  # lo storico del seed arriva davvero alla tabella
+            assert any(c.value.startswith("Mostrando ") and not c.value.startswith("Mostrando 0")
+                       for c in at.caption)  # fmt: skip
 
 
 def test_con_un_utente_senza_dati_ogni_pagina_resta_usabile(

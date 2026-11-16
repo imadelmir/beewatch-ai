@@ -700,7 +700,6 @@ section[data-testid="stSidebar"] {
 
 .bw-tabella-testa {
   display: grid;
-  grid-template-columns: 1.1fr 1.7fr 1.7fr 1.1fr 1.3fr 1.5fr 1.4fr;
   gap: 1rem;
   padding: 0.6rem 0.25rem;
   font-size: 0.8rem;
@@ -838,4 +837,18 @@ section[data-testid="stSidebar"] {
 
 .st-key-bw_conferma_elimina [data-testid="stMarkdownContainer"] strong {
   font-size: 1.15rem;
+}
+
+/* il filtro del periodo, giallo come nel mockup («Ultimi 30 giorni») */
+.st-key-bw_periodo [data-testid="stSelectbox"] [role="group"] {
+  border-color: var(--bw-accento);
+  background: var(--bw-accento-tenue);
+}
+
+/* un form dentro una card non ha una seconda cornice */
+[class*="st-key-bw_card_"] [data-testid="stForm"] {
+  background: transparent;
+  border: none !important;
+  box-shadow: none;
+  padding: 0;
 }
