@@ -133,6 +133,8 @@ ICONE = {
     "chat": '<path d="M5 5h14v10H9l-4 4z"/>',
     "forza": '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
     "peso": '<circle cx="12" cy="6" r="2"/><path d="M7 8h10l2 12H5z"/>',
+    "assistente": '<rect x="4" y="7" width="16" height="12" rx="2"/>'
+    '<path d="M12 3v4M9 12h.01M15 12h.01M9 16h6"/>',
 }
 
 

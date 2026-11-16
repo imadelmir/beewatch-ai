@@ -30,6 +30,7 @@ from avvio import (
     riepiloghi_ispezione,
     svuota_letture,
 )
+from schede import intestazione_chat, testata
 from ui import (
     AZIONE_NESSUN_APIARIO,
     NESSUN_APIARIO,
@@ -38,7 +39,6 @@ from ui import (
     etichetta_rischio,
     formatta_data,
     formatta_numero,
-    intestazione,
     metrica,
     mostra_errore,
     sidebar,
@@ -144,14 +144,11 @@ def titolo_ispezione(ispezione) -> str:
 # Pagina
 # --------------------------------------------------------------------------- #
 
-servizi = avvia("Assistente AI", "🤖")
+servizi = avvia("AI Assistant", "🤖")
 attivo = sidebar()
 utente = st.session_state[CHIAVE_UTENTE]
 
-intestazione(
-    "🤖 Assistente AI",
-    "Un riepilogo delle note di campo di un'ispezione, scritto da un modello di linguaggio.",
-)
+testata("AI Assistant", "Chiedi al tuo assistente AI un riepilogo delle note di campo.")
 banner_ai()
 
 try:
@@ -175,138 +172,176 @@ if not con_note:
     )
     st.stop()
 
-# --------------------------------------------------------------------------- #
-# Controlli
-# --------------------------------------------------------------------------- #
-
 info = servizi.info_assistente()
-st.caption(
-    f"Assistente: **{info.descrizione}** · prompt **{info.versione_prompt}**. "
-    "Le note vengono inviate a questo modello per scrivere il riepilogo."
-)
-
 per_id = {i.id: i for i in con_note}
-scelta = per_id[
-    st.selectbox(
-        "Ispezione da riassumere",
-        options=list(per_id),
-        format_func={i.id: titolo_ispezione(i) for i in con_note}.__getitem__,
-        # La chiave segue l'elenco: dopo una nuova ispezione riparte dalla più recente (M6-T4).
-        key=f"ispezione_da_riassumere_{hash(tuple(per_id)) & 0xFFFFFFFF:x}",
-        help="Le ispezioni dell'apiario attivo che hanno note, dalla più recente.",
-    )
-]
-st.text_area(
-    "Le note che il modello leggerà",
-    value=scelta.note,
-    height=160,
-    disabled=True,
-    key=f"note_da_riassumere_{scelta.id}",
-)
+colonna_ispezioni, colonna_chat = st.columns([1, 2.4])
+
+# --------------------------------------------------------------------------- #
+# A sinistra: le ispezioni con le note (le «conversazioni» del mockup)
+# --------------------------------------------------------------------------- #
+
+with colonna_ispezioni, st.container(key="bw_card_conversazioni"):
+    st.subheader("Ispezioni")
+    st.caption(f"Quelle di {attivo.nome} con le note di campo, dalla più recente.")
+    with st.container(key="bw_elenco_ispezioni"):
+        scelta = per_id[
+            st.radio(
+                "Ispezione da riassumere",
+                options=list(per_id),
+                format_func={i.id: titolo_ispezione(i) for i in con_note}.__getitem__,
+                # La chiave segue l'elenco: dopo una nuova ispezione riparte dalla più recente.
+                key=f"ispezione_da_riassumere_{hash(tuple(per_id)) & 0xFFFFFFFF:x}",
+                label_visibility="collapsed",
+            )
+        ]
+    contatori = st.container()
+
+# --------------------------------------------------------------------------- #
+# A destra: la «chat» con l'assistente
+# --------------------------------------------------------------------------- #
 
 generato = None
-# M6-T13: chi non vuole che le note escano dal PC lo sceglie in Impostazioni; il servizio lo fa
-# rispettare comunque, qui si evita di proporre un bottone che non può funzionare.
-try:
-    vietato_esterno = info.in_locale is False and not preferenze(utente).assistente_esterno
-except BeeWatchError as errore:
-    mostra_errore(errore)
-    vietato_esterno = True
-if vietato_esterno:
-    st.warning(
-        "L'assistente configurato è esterno, e in **Impostazioni** hai scelto di non inviare le "
-        "note fuori dal PC: il riepilogo non si genera.",
-        icon="🔒",
-    )
-elif st.button("Genera il riepilogo", type="primary", key="genera_riepilogo"):
-    minuti = max(1, round(info.attesa_massima_s / 60))
-    try:
-        with st.spinner(
-            "Sto interrogando il modello: di solito servono da pochi secondi a un minuto, "
-            f"ma con un modello locale lento può richiedere fino a circa {minuti} minuti."
-        ):
-            generato = servizi.genera_riepilogo_ispezione(utente, scelta.id)
-    except BeeWatchError as errore:  # LLMError (anche il timeout), ConfigError, ValidationError
-        mostra_errore(errore)
-    else:
-        if generato.salvato:
-            svuota_letture()  # lo storico qui sotto deve vederlo
-
-# --------------------------------------------------------------------------- #
-# Contenuto
-# --------------------------------------------------------------------------- #
-
-try:
-    salvati = riepiloghi_ispezione(utente, scelta.id)
-except BeeWatchError as errore:
-    mostra_errore(errore)
-    salvati = None
-
-colonne = st.columns(4)
-with colonne[0]:
-    metrica(
-        "Ispezioni con note",
-        len(con_note),
-        None,
-        aiuto=f"Le ispezioni di {attivo.nome} che l'assistente può riassumere.",
-    )
-if salvati is not None:
-    with colonne[1]:
-        metrica(
-            "Riepiloghi salvati",
-            len(salvati),
-            None,
-            aiuto="I riepiloghi già generati per l'ispezione scelta.",
-        )
-
-if generato is not None:
-    st.subheader(f"Riepilogo dell'ispezione del {formatta_data(scelta.data_ispezione)}")
-    if not generato.valido:
-        st.warning(generato.messaggio, icon="⚠️")
-    else:
-        mostra_riepilogo(generato.riepilogo)
-        if not generato.salvato:
-            st.warning(generato.messaggio, icon="⚠️")
+with colonna_chat, st.container(key="bw_card_chat"):
+    intestazione_chat("Assistente BeeWatch", info.descrizione, info.in_locale)
     st.caption(
-        provenienza(
-            generato.modello,
-            generato.provider,
-            generato.versione_prompt,
-            generato.durata_ms,
-            generato.tentativi,
-        )
+        f"Assistente: **{info.descrizione}** · prompt **{info.versione_prompt}**. "
+        "Le note vengono inviate a questo modello per scrivere il riepilogo."
     )
-    if not generato.in_locale:
-        st.caption("Le note di questa ispezione sono state inviate a un servizio esterno.")
-
-st.subheader("Riepiloghi già generati per questa ispezione")
-
-if salvati is not None and not salvati:
-    blocco_vuoto(
-        "Nessun riepilogo salvato per questa ispezione.",
-        "Generane uno con il bottone qui sopra: ogni riepilogo resta, anche i precedenti.",
-    )
-for salvato in salvati or ():
-    creato = salvato.creato_il.strftime("%d/%m/%Y %H:%M")
-    confidenza = LIVELLI.get(salvato.riepilogo.confidenza, salvato.riepilogo.confidenza)
-    with st.expander(
-        f"{creato} · {salvato.modello} · prompt {salvato.versione_prompt} · "
-        f"confidenza {confidenza.lower()}"
-    ):
-        mostra_riepilogo(salvato.riepilogo)
+    with st.container(key="bw_fumetto_utente"):
         st.caption(
-            provenienza(
-                salvato.modello,
-                salvato.provider,
-                salvato.versione_prompt,
-                salvato.durata_ms,
-                salvato.tentativi,
-            )
+            f"Le note dell'ispezione del {formatta_data(scelta.data_ispezione)} di "
+            f"{scelta.codice_alveare}, come le leggerà il modello"
+        )
+        st.text_area(
+            "Le note che il modello leggerà",
+            value=scelta.note,
+            height=140,
+            disabled=True,
+            key=f"note_da_riassumere_{scelta.id}",
+            label_visibility="collapsed",
         )
 
-# --------------------------------------------------------------------------- #
-# Note
-# --------------------------------------------------------------------------- #
+    try:
+        salvati = riepiloghi_ispezione(utente, scelta.id)
+    except BeeWatchError as errore:
+        mostra_errore(errore)
+        salvati = None
+
+    # M6-T13: chi non vuole che le note escano dal PC lo sceglie in Impostazioni; il servizio lo
+    # fa rispettare comunque, qui si evita di proporre un bottone che non può funzionare.
+    try:
+        vietato_esterno = info.in_locale is False and not preferenze(utente).assistente_esterno
+    except BeeWatchError as errore:
+        mostra_errore(errore)
+        vietato_esterno = True
+    if vietato_esterno:
+        st.warning(
+            "L'assistente configurato è esterno, e in **Impostazioni** hai scelto di non inviare "
+            "le note fuori dal PC: il riepilogo non si genera.",
+            icon="🔒",
+        )
+    elif st.button(
+        "Rigenera il riepilogo" if salvati else "Genera il riepilogo",
+        type="primary",
+        key="genera_riepilogo",
+        icon=":material/refresh:" if salvati else ":material/smart_toy:",
+    ):
+        minuti = max(1, round(info.attesa_massima_s / 60))
+        try:
+            with st.spinner(
+                "Sto interrogando il modello: di solito servono da pochi secondi a un minuto, "
+                f"ma con un modello locale lento può richiedere fino a circa {minuti} minuti."
+            ):
+                generato = servizi.genera_riepilogo_ispezione(utente, scelta.id)
+        except BeeWatchError as errore:  # LLMError (anche il timeout), ConfigError, Validation
+            mostra_errore(errore)
+        else:
+            if generato.salvato:
+                svuota_letture()  # lo storico qui sotto deve vederlo
+                try:
+                    salvati = riepiloghi_ispezione(utente, scelta.id)
+                except BeeWatchError as errore:
+                    mostra_errore(errore)
+
+    # La risposta: quella appena generata o, se non c'è, l'ultima salvata.
+    if generato is not None:
+        with st.container(key="bw_fumetto_ai"):
+            st.subheader(f"Riepilogo dell'ispezione del {formatta_data(scelta.data_ispezione)}")
+            if not generato.valido:
+                st.warning(generato.messaggio, icon="⚠️")
+            else:
+                mostra_riepilogo(generato.riepilogo)
+                if not generato.salvato:
+                    st.warning(generato.messaggio, icon="⚠️")
+            st.caption(
+                provenienza(
+                    generato.modello,
+                    generato.provider,
+                    generato.versione_prompt,
+                    generato.durata_ms,
+                    generato.tentativi,
+                )
+            )
+            if not generato.in_locale:
+                st.caption("Le note di questa ispezione sono state inviate a un servizio esterno.")
+    elif salvati:
+        ultimo = salvati[0]
+        with st.container(key="bw_fumetto_ai"):
+            st.subheader(f"Riepilogo dell'ispezione del {formatta_data(scelta.data_ispezione)}")
+            mostra_riepilogo(ultimo.riepilogo)
+            generato_il = ultimo.creato_il.strftime("%d/%m/%Y %H:%M")
+            st.caption(
+                provenienza(
+                    ultimo.modello,
+                    ultimo.provider,
+                    ultimo.versione_prompt,
+                    ultimo.durata_ms,
+                    ultimo.tentativi,
+                )
+                + f" Generato il {generato_il}."
+            )
+
+    st.subheader("Riepiloghi già generati per questa ispezione")
+    if salvati is not None and not salvati:
+        blocco_vuoto(
+            "Nessun riepilogo salvato per questa ispezione.",
+            "Generane uno con il bottone qui sopra: ogni riepilogo resta, anche i precedenti.",
+        )
+    for salvato in salvati or ():
+        creato = salvato.creato_il.strftime("%d/%m/%Y %H:%M")
+        confidenza = LIVELLI.get(salvato.riepilogo.confidenza, salvato.riepilogo.confidenza)
+        with st.expander(
+            f"{creato} · {salvato.modello} · prompt {salvato.versione_prompt} · "
+            f"confidenza {confidenza.lower()}"
+        ):
+            mostra_riepilogo(salvato.riepilogo)
+            st.caption(
+                provenienza(
+                    salvato.modello,
+                    salvato.provider,
+                    salvato.versione_prompt,
+                    salvato.durata_ms,
+                    salvato.tentativi,
+                )
+            )
+
+with contatori:
+    colonne = st.columns(2)
+    with colonne[0]:
+        metrica(
+            "Ispezioni con note",
+            len(con_note),
+            None,
+            aiuto=f"Le ispezioni di {attivo.nome} che l'assistente può riassumere.",
+        )
+    if salvati is not None:
+        with colonne[1]:
+            metrica(
+                "Riepiloghi salvati",
+                len(salvati),
+                None,
+                aiuto="I riepiloghi già generati per l'ispezione scelta.",
+            )
 
 st.caption(
     "Il riepilogo legge solo le note scritte e qualche dato dell'alveare (le ultime ispezioni, i "

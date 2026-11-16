@@ -171,9 +171,11 @@ def test_le_schermate_non_disegnano_titoli_sidebar_ne_errori_per_conto_loro(sche
 
 
 def test_il_banner_ai_e_nella_pagina_dellassistente_subito_dopo_lintestazione():
-    chiamate = [c for c in nomi_chiamati(PAGINE[3]) if c in ("intestazione", "banner_ai")]
+    chiamate = [
+        c for c in nomi_chiamati(PAGINE[3]) if c in ("intestazione", "testata", "banner_ai")
+    ]
     assert PAGINE[3].name == "4_Assistente_AI.py"
-    assert chiamate == ["intestazione", "banner_ai"]
+    assert chiamate == ["testata", "banner_ai"]  # la testata del mockup, poi il banner
 
 
 def test_nessun_form_e_duplicato_tra_le_pagine():
