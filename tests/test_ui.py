@@ -57,9 +57,10 @@ HOME = APP / "Home.py"  # il router (M6-T11): con l'accesso fatto apre la Home
 CONTENUTO_HOME = APP / "schermate" / "home.py"  # il codice della Home
 SCHERMATE = [CONTENUTO_HOME, *PAGINE]  # la Home e le sei pagine
 # Le pagine che leggono il database (le altre leggono solo il modello di previsione).
-COL_DATABASE = {p.name for p in PAGINE} - {"3_Previsione.py", "6_Trasparenza.py"}
+# Previsioni ora mostra anche i raccolti (la Dashboard di M6-T7): legge gli apiari come le altre.
+COL_DATABASE = {p.name for p in PAGINE} - {"6_Trasparenza.py"}
 # Le pagine che senza apiari dicono «Nessun apiario registrato» (Impostazioni non ne ha bisogno).
-COL_APIARIO = COL_DATABASE - {"8_Impostazioni.py"}
+COL_APIARIO = COL_DATABASE - {"8_Impostazioni.py", "3_Previsione.py"}
 
 CATALOGO = {
     "intestazione": ["titolo", "descrizione"],
@@ -136,7 +137,11 @@ def test_i_parametri_facoltativi_sono_quelli_della_specifica(ui):
 def test_le_quattro_funzioni_comuni_sono_usate_da_ogni_schermata(schermata, helper):
     # Le card del mockup (`schede.py`) fanno le veci di intestazione e metrica dove ci sono.
     # Nelle pagine-tabella (Alveari, Ispezioni) il numero di contesto è «Mostrando N di M».
-    equivalenti = {"intestazione": {"testata"}, "metrica": {"scheda_kpi", "intestazione_tabella"}}
+    # In Previsioni il numero è la stima, sempre con la sua banda (`stima_con_incertezza`).
+    equivalenti = {
+        "intestazione": {"testata"},
+        "metrica": {"scheda_kpi", "intestazione_tabella", "stima_con_incertezza"},
+    }
     chiamate = set(nomi_chiamati(schermata))
     assert helper in chiamate or chiamate & equivalenti.get(helper, set())
 
@@ -763,10 +768,14 @@ def test_ogni_pagina_con_dati_ha_intestazione_e_un_numero_di_contesto(
     at = naviga(pagina)
 
     assert not at.exception
-    assert len(at.title) == 1 and len(at.markdown) >= 1  # titolo e riga di contesto
+    # titolo e riga di contesto (nel mockup, il sottotitolo grigio è una didascalia)
+    assert len(at.title) == 1 and (at.markdown or at.caption)
     assert not at.error
     if pagina.name in ("1_Alveari.py", "2_Ispezioni.py"):  # mockup: una tabella, non metriche
         assert any("bw-tabella-testa" in e.proto.body for e in at.get("html"))
+        return
+    if pagina.name == "3_Previsione.py":  # prima del calcolo: le card del modello, non numeri
+        assert "Affidabilità modello" in valori(at.subheader)
         return
     assert at.metric
     assert all(m.value not in ("", "—") for m in at.metric)

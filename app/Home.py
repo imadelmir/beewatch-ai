@@ -44,7 +44,6 @@ else:
         st.Page("pages/2_Ispezioni.py", title="Ispezioni", icon=":material/assignment_turned_in:"),
         st.Page("pages/3_Previsione.py", title="Previsioni", icon=":material/show_chart:"),
         st.Page("pages/4_Assistente_AI.py", title="AI Assistant", icon=":material/smart_toy:"),
-        st.Page("pages/5_Dashboard.py", title="Statistiche", icon=":material/bar_chart:"),
         st.Page("pages/6_Trasparenza.py", title="Trasparenza", icon=":material/visibility:"),
         st.Page("pages/7_Report.py", title="Report", icon=":material/description:"),
         st.Page("pages/8_Impostazioni.py", title="Impostazioni", icon=":material/settings:"),

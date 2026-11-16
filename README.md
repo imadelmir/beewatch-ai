@@ -33,7 +33,7 @@ conversazionale che può girare interamente sul tuo computer.
 |---|---|
 | **Problema** | Un apicoltore amatoriale annota apiari, ispezioni e raccolti su carta o su un foglio: i dati esistono, ma non dicono niente sulla resa attesa |
 | **Il mio ruolo** | Progetto personale. Finora: configurazione e gestione dei segreti, gerarchia delle eccezioni, logging, CI, schema del database e dati di partenza, accesso ai dati (transazioni, repository) ed ETL del dataset USDA |
-| **Risultato finora** | 4 milestone su 8 completate, 1877 test automatici (1717 rapidi + 160 con MySQL in Docker), CI verde |
+| **Risultato finora** | 4 milestone su 8 completate, 1863 test automatici (1703 rapidi + 160 con MySQL in Docker), CI verde |
 | **Stack** | Python · MySQL · Docker · scikit-learn · Streamlit · pandas |
 | **Demo** | `streamlit run app/Home.py`, poi «Entra con l'utente dimostrativo». [Case study](https://portfolio-imad-el-mir.vercel.app/it/projects/beewatch-ai) |
 | **Avvio** | `pip install -e ".[dev]"` e Docker per MySQL — [istruzioni](#avvio-rapido) |
@@ -128,10 +128,12 @@ streamlit run app/Home.py
 Si apre su <http://localhost:8501>, sulla pagina **Accedi**. Per provare subito c'è il bottone
 **Entra con l'utente dimostrativo** (o le sue credenziali del seed: `demo@beewatch.local`,
 password `beewatch-demo`); con **Registrati** si crea un account e si parte dai primi passi guidati.
-Dopo l'accesso la Home mostra la panoramica e il menu a sinistra ha le pagine: Alveari, Ispezioni,
-Previsione, Assistente AI, Dashboard, Trasparenza, Report (mensile, produzione, stato sanitario, da
-scaricare in CSV, Excel o PDF) e Impostazioni (profilo, password, cancellazione dell'account,
-promemoria, consenso all'assistente esterno, configurazione in sola lettura). Le password si salvano solo come hash bcrypt. Senza
+Dopo l'accesso si apre la Dashboard e il menu a sinistra ha le pagine: Alveari, Ispezioni,
+Previsioni (con il confronto previsto/reale e l'affidabilità del modello), AI Assistant, Trasparenza,
+Report (mensile, produzione, stato sanitario, da scaricare in CSV, Excel o PDF) e Impostazioni
+(profilo, password, cancellazione dell'account, promemoria, consenso all'assistente esterno,
+configurazione in sola lettura). L'aspetto è quello del mockup ad alta fedeltà, in tema chiaro e
+scuro (interruttore in Accedi e nelle Impostazioni). Le password si salvano solo come hash bcrypt. Senza
 database, o senza `.env`, l'app parte e lo dice in chiaro invece di rompersi. Con `docker compose up -d`
 parte anche l'interfaccia, nel contenitore.
 
