@@ -928,3 +928,40 @@ section[data-testid="stSidebar"] {
   color: var(--bw-accento-testo);
   font-weight: 600;
 }
+
+/* nell'elenco delle ispezioni dell'assistente niente pallini: la scelta è la riga gialla */
+.st-key-bw_elenco_ispezioni [role="radiogroup"] label > div > div > div:first-child {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- Report */
+
+.bw-modello {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.bw-modello .bw-icona-tonda {
+  width: 44px;
+  height: 44px;
+}
+
+.bw-modello-titolo {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--bw-testo);
+}
+
+.bw-modello-testo {
+  margin: 0.6rem 0 0.2rem 0;
+  font-size: 0.88rem;
+  color: var(--bw-testo2);
+  min-height: 2.6rem;
+}
+
+[class*="st-key-bw_card_modello_"] [data-testid="stBaseButton-secondary"] {
+  border-color: var(--bw-accento);
+  color: var(--bw-accento-testo);
+  background: transparent;
+}

@@ -773,8 +773,11 @@ def test_ogni_pagina_con_dati_ha_intestazione_e_un_numero_di_contesto(
     # titolo e riga di contesto (nel mockup, il sottotitolo grigio è una didascalia)
     assert len(at.title) == 1 and (at.markdown or at.caption)
     assert not at.error
-    if pagina.name in ("1_Alveari.py", "2_Ispezioni.py"):  # mockup: una tabella, non metriche
+    if pagina.name in ("1_Alveari.py", "2_Ispezioni.py"):  # tabelle del mockup, non metriche
         assert any("bw-tabella-testa" in e.proto.body for e in at.get("html"))
+        return
+    if pagina.name == "7_Report.py":  # le card dei modelli e l'archivio (qui vuoto)
+        assert "Report generati" in valori(at.subheader)
         return
     if pagina.name == "3_Previsione.py":  # prima del calcolo: le card del modello, non numeri
         assert "Affidabilità modello" in valori(at.subheader)

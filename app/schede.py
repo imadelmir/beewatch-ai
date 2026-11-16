@@ -360,3 +360,17 @@ def intestazione_chat(nome: str, descrizione: str, in_locale: bool | None) -> No
         f'<span class="bw-badge sano">{html.escape(provider)}</span>'
         f'<span class="bw-chat-nota">{nota}</span></div>'
     )
+
+
+# --------------------------------------------------------------------------- #
+# Report: le card dei tre modelli
+# --------------------------------------------------------------------------- #
+
+
+def scheda_modello_report(icona: str, titolo: str, descrizione: str) -> None:
+    """L'intestazione di una card dei modelli: icona nel cerchio giallo, titolo e descrizione."""
+    st.html(
+        f'<div class="bw-modello"><span class="bw-icona-tonda">{immagine_icona(icona, 20)}</span>'
+        f'<span class="bw-modello-titolo">{html.escape(titolo)}</span></div>'
+        f'<p class="bw-modello-testo">{html.escape(descrizione)}</p>'
+    )
