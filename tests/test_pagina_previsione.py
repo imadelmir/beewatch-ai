@@ -8,7 +8,13 @@ l'utente (stima con la banda, modello, avvisi, storico) e cosa finisce nello sto
 from __future__ import annotations
 
 import pytest
-from anagrafica_finta import DATABASE_SPENTO, AlveariInMemoria, ApiariInMemoria, anagrafica_di_prova
+from anagrafica_finta import (
+    DATABASE_SPENTO,
+    AlveariInMemoria,
+    ApiariInMemoria,
+    RaccoltiInMemoria,
+    anagrafica_di_prova,
+)
 from app_finta import APP, DashboardFinto, con_accesso, installa, valori
 from previsione_finta import (
     FEATURE_INCOMPATIBILI,
@@ -57,6 +63,7 @@ def prepara(
         previsioni=previsioni,
         modelli=ModelliFinti(),
         dashboard=DashboardFinto(),
+        raccolti=RaccoltiInMemoria(apiari),
         descrizione_llm="llama3.1:8b via ollama (chiave: non richiesta)",
     )
     installa(app_pronta, monkeypatch, servizi)
@@ -98,13 +105,13 @@ def test_la_pagina_mostra_limiti_modello_e_modulo(ambiente):
     at = apri()
 
     assert not at.exception and not at.error
-    assert valori(at.title) == ["📈 Previsione"]
+    assert valori(at.title) == ["Previsioni"]
     [limiti] = valori(at.warning)
     assert limiti.startswith("**Limiti di trasferibilità.**")
     assert (
         not at.expander
     )  # il disclaimer non sta in un espansore (e prima del calcolo non ce ne sono)
-    assert {m.label: m.value for m in at.metric} == {"Errore medio del modello": "3,5 kg"}
+    assert not at.metric  # prima del calcolo nessun numero: l'errore medio ha la sua card
     assert any(
         "Modello in uso: **v-finto** (RandomForestRegressor)" in c for c in valori(at.caption)
     )
@@ -150,10 +157,9 @@ def test_prevedere_dai_dati_mostra_stima_banda_modello_e_la_salva(ambiente):
 def test_i_valori_usati_dal_modello_si_possono_vedere(ambiente):
     at = calcola(apri(), "CA", 2013)
 
-    [espansore] = at.expander
-    assert espansore.label == "I valori con cui il modello ha stimato"
-    valori_usati = {r["Valore"]: r["Dato"] for r in at.dataframe[0].value.to_dict("records")}
-    assert valori_usati["Stato"] == "CA" and valori_usati["Anno da prevedere"] == "2013"
+    assert "Fattori principali" in valori(at.subheader)
+    fattori = " ".join(e.proto.body for e in at.get("html"))
+    assert "Anno da prevedere" in fattori and "2013" in fattori and ">CA<" in fattori
     assert "prova a ritroso" not in " ".join(valori(at.caption))  # il 2013 è davvero futuro
 
 
@@ -214,6 +220,7 @@ def test_i_parametri_a_mano_hanno_come_limiti_lintervallo_delladdestramento(ambi
 def test_una_simulazione_mostra_la_stima_e_non_si_salva(ambiente):
     at = apri()
     at.radio(key="modo").set_value(A_MANO).run()
+    prima = len(ambiente.predittore.ricevute)  # il confronto «Storico vs previsto» lo interroga
 
     at = calcola(
         at, "CA", 2005, resa_anno_prima=40.0, resa_media_3_anni_prima=42.0,
@@ -224,21 +231,24 @@ def test_una_simulazione_mostra_la_stima_e_non_si_salva(ambiente):
     assert "California, 2005 · simulazione con parametri a mano" in valori(at.subheader)
     assert next(m for m in at.metric if m.label == "Resa per colonia stimata").value == "42 kg"
     assert any("Le simulazioni non si salvano" in c for c in valori(at.caption))
-    assert ambiente.predittore.ricevute[0]["colonie_anno_prima"] == 420_000
+    simulazione = ambiente.predittore.ricevute[prima]
+    assert simulazione["colonie_anno_prima"] == 420_000
     assert ambiente.previsioni.salvate == []
 
 
 def test_un_parametro_mancante_si_ferma_nella_pagina(ambiente):
     at = apri()
     at.radio(key="modo").set_value(A_MANO).run()
+    stime = [r for r in ambiente.predittore.ricevute if r.get("anno") == 2005]
 
     at = calcola(at, "CA", 2005, resa_anno_prima=40.0)
 
-    errori = valori(at.error)
+    errori = [e for e in valori(at.error) if e.startswith("**Un dato inserito non è valido.**")]
     assert len(errori) == 2
     assert "Scrivi «Resa media dei 3 anni prima»." in errori[0]
     assert "Scrivi «Colonie dell'anno prima»." in errori[1]
-    assert ambiente.predittore.ricevute == []  # il modello non è stato interrogato
+    # il modello non è stato interrogato per il 2005 (lo interroga solo il confronto)
+    assert [r for r in ambiente.predittore.ricevute if r.get("anno") == 2005] == stime
 
 
 # --------------------------------------------------------------------------- #
@@ -269,9 +279,10 @@ def test_feature_incompatibili_col_modello_si_spiegano_senza_crash(app_pronta, m
     at = calcola(apri(), "CA", 2010)
 
     assert not at.exception
-    [errore] = valori(at.error)
-    assert errore.startswith("**Il modello di previsione non è disponibile.**")
-    assert "mancano le colonne: temperatura_media" in errore
+    errori = valori(at.error)  # il calcolo e, sotto, il confronto: lo stesso problema
+    assert errori and all(e.startswith("**Il modello di previsione non è disponibile.**")
+                          for e in errori)  # fmt: skip
+    assert any("mancano le colonne: temperatura_media" in e for e in errori)
     assert ambiente.previsioni.salvate == []
 
 

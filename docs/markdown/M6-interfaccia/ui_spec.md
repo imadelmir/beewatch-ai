@@ -262,7 +262,6 @@ Contenuto, dall'alto in basso:
    | `2_Ispezioni.py` | Ispezioni |
    | `3_Previsione.py` | Previsioni |
    | `4_Assistente_AI.py` | AI Assistant |
-   | `5_Dashboard.py` | Statistiche (finché il contenuto non passa in Previsioni, come nel mockup) |
    | `6_Trasparenza.py` | Trasparenza |
    | `7_Report.py` | Report (M6-T12, oltre alle sei originali) |
    | `8_Impostazioni.py` | Impostazioni (M6-T13, oltre alle sei originali) |

@@ -92,7 +92,7 @@ ICONE_TEMA = {"Scuro": ":material/dark_mode:", "Chiaro": ":material/light_mode:"
 # Un test controlla che coincidano con le pagine del router.
 PERCORSI_APP = [
     "", "accedi", "registrati", "onboarding", "home", "Alveari", "Ispezioni", "Previsione",
-    "Assistente_AI", "Dashboard", "Trasparenza", "Report", "Impostazioni",
+    "Assistente_AI", "Trasparenza", "Report", "Impostazioni",
 ]  # fmt: skip
 
 

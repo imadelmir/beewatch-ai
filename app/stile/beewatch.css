@@ -852,3 +852,9 @@ section[data-testid="stSidebar"] {
   box-shadow: none;
   padding: 0;
 }
+
+/* i titoli dentro le card: «Titolo card» del mockup (Bold 18) */
+[class*="st-key-bw_card_"] h3 {
+  font-size: 1.125rem;
+  padding-top: 0;
+}

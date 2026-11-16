@@ -39,7 +39,6 @@ FATTE = {
     "2_Ispezioni.py",
     "3_Previsione.py",
     "4_Assistente_AI.py",
-    "5_Dashboard.py",
     "6_Trasparenza.py",
     "7_Report.py",
     "8_Impostazioni.py",

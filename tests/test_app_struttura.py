@@ -26,7 +26,6 @@ SEI_PAGINE = [
     "2_Ispezioni.py",
     "3_Previsione.py",
     "4_Assistente_AI.py",
-    "5_Dashboard.py",
     "6_Trasparenza.py",
     "7_Report.py",  # M6-T12: oltre alle sei della specifica
     "8_Impostazioni.py",  # M6-T13
@@ -140,7 +139,8 @@ def test_lordine_nel_menu_e_quello_del_prefisso_numerico():
     # Streamlit ordina le pagine per il numero davanti al nome (poi alfabeticamente).
     ordinate = sorted(PAGINE.glob("*.py"), key=lambda p: (int(p.name.split("_")[0]), p.name))
     assert [p.name for p in ordinate] == SEI_PAGINE
-    assert [int(p.name.split("_")[0]) for p in ordinate] == [1, 2, 3, 4, 5, 6, 7, 8]
+    # il 5 era la Dashboard di M6-T7: ora è dentro Previsioni, come nel mockup
+    assert [int(p.name.split("_")[0]) for p in ordinate] == [1, 2, 3, 4, 6, 7, 8]
 
 
 def test_il_punto_di_ingresso_e_home_py_e_main_py_non_esiste_piu():
