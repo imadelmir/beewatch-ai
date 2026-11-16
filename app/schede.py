@@ -337,3 +337,26 @@ def barra_rischio(nome: str, livello: int, etichetta: str) -> None:
         f'<div class="bw-barra-fondo"><span class="{tono}" style="width:{larghezza}%"></span>'
         "</div></div>"
     )
+
+
+# --------------------------------------------------------------------------- #
+# La «chat» dell'AI Assistant
+# --------------------------------------------------------------------------- #
+
+
+def intestazione_chat(nome: str, descrizione: str, in_locale: bool | None) -> None:
+    """La riga in cima alla chat: l'icona, il nome e la pastiglia di dove gira l'assistente.
+
+    `descrizione` è «modello via provider (chiave: …)» (`InfoAssistente`): nella pastiglia va il
+    provider, e accanto il modello. Senza provider configurato la pastiglia lo dice.
+    """
+    modello, _, resto = descrizione.partition(" via ")
+    provider = resto.split(" ")[0].capitalize() if resto else "Non configurato"
+    dove = {True: "sul PC", False: "esterno", None: ""}[in_locale]
+    nota = f" · {html.escape(modello)} {dove}".rstrip() if resto else ""
+    st.html(
+        f'<div class="bw-chat-testa">{immagine_icona("assistente", 22)}'
+        f'<span class="bw-chat-nome">{html.escape(nome)}</span>'
+        f'<span class="bw-badge sano">{html.escape(provider)}</span>'
+        f'<span class="bw-chat-nota">{nota}</span></div>'
+    )

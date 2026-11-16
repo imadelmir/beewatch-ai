@@ -858,3 +858,73 @@ section[data-testid="stSidebar"] {
   font-size: 1.125rem;
   padding-top: 0;
 }
+
+/* ---------------------------------------------------------------- AI Assistant */
+
+.bw-chat-testa {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--bw-bordo);
+  margin-bottom: 0.5rem;
+}
+
+.bw-chat-nome {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--bw-testo);
+}
+
+.bw-chat-nota {
+  font-size: 0.82rem;
+  color: var(--bw-testo2);
+}
+
+/* le note: il fumetto dell'utente, a destra e giallo */
+.st-key-bw_fumetto_utente {
+  margin-left: 18%;
+  padding: 0.8rem 1rem;
+  background: var(--bw-accento-tenue);
+  border: 1px solid var(--bw-accento);
+  border-radius: 16px 16px 4px 16px;
+}
+
+.st-key-bw_fumetto_utente textarea {
+  background: transparent;
+}
+
+/* la risposta: il fumetto dell'assistente, a sinistra */
+.st-key-bw_fumetto_ai {
+  margin-right: 8%;
+  padding: 1rem 1.2rem;
+  background: var(--bw-sfondo);
+  border: 1px solid var(--bw-bordo);
+  border-radius: 16px 16px 16px 4px;
+}
+
+.st-key-bw_fumetto_ai h3 {
+  font-size: 1rem;
+}
+
+/* l'elenco delle ispezioni: le «conversazioni», con la scelta in giallo */
+.st-key-bw_elenco_ispezioni [role="radiogroup"] {
+  gap: 0.25rem;
+}
+
+.st-key-bw_elenco_ispezioni [role="radiogroup"] label {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border-left: 3px solid transparent;
+}
+
+.st-key-bw_elenco_ispezioni [role="radiogroup"] label:has(input:checked) {
+  background: var(--bw-accento-tenue);
+  border-left-color: var(--bw-accento);
+}
+
+.st-key-bw_elenco_ispezioni [role="radiogroup"] label:has(input:checked) p {
+  color: var(--bw-accento-testo);
+  font-weight: 600;
+}

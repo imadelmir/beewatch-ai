@@ -79,7 +79,7 @@ def apri() -> AppTest:
 
 
 def selettore(at: AppTest):
-    [s] = [s for s in at.selectbox if s.key.startswith("ispezione_da_riassumere_")]
+    [s] = [s for s in at.radio if s.key.startswith("ispezione_da_riassumere_")]
     return s
 
 
@@ -104,7 +104,7 @@ def test_la_pagina_ha_banner_ispezioni_con_note_e_le_note_da_leggere(ambiente):
     at = apri()
 
     assert not at.exception and not at.error
-    assert valori(at.title) == ["🤖 Assistente AI"]
+    assert valori(at.title) == ["AI Assistant"]
     [banner] = [i for i in at.info if i.icon == "🤖"]
     assert banner.value.startswith("Il riepilogo qui sotto è generato da un'intelligenza")
     assert not at.expander  # banner non nascondibile, e ancora nessuno storico
@@ -122,7 +122,7 @@ def test_la_pagina_ha_banner_ispezioni_con_note_e_le_note_da_leggere(ambiente):
 
 def test_cambiando_ispezione_si_vedono_le_sue_note(ambiente):
     at = apri()
-    selettore(at).select(101).run()
+    selettore(at).set_value(101).run()
 
     assert at.text_area(key="note_da_riassumere_101").value == NOTA_LUNGA
 
