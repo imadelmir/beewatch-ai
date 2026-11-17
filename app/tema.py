@@ -42,12 +42,14 @@ PALETTE: dict[str, dict[str, str]] = {
         "successo": "#2FA96A",
         "attenzione": "#E8890B",
         "critico": "#E0524A",
+        "informazione": "#1565C0",  # il blu dei riquadri informativi (Privacy, AI Act)
         # derivati
         "accento-testo": "#B98200",
         "accento-tenue": "#FFF4D1",
         "attenzione-tenue": "#FDEBD6",
         "critico-tenue": "#FBE3E1",
         "successo-tenue": "#E1F4EA",
+        "informazione-tenue": "#E3EEFB",
         "voce-attiva": "#FFF1C7",
         "voce-attiva-testo": "#1E1A12",
         "ombra": "0 1px 2px rgba(30, 26, 18, 0.04), 0 8px 24px -12px rgba(30, 26, 18, 0.10)",
@@ -68,12 +70,14 @@ PALETTE: dict[str, dict[str, str]] = {
         "successo": "#4ADE80",
         "attenzione": "#FFA726",
         "critico": "#FF6B6B",
+        "informazione": "#60A5FA",  # sul nero il blu scuro non si legge
         # derivati
         "accento-testo": "#FFC709",
         "accento-tenue": "rgba(255, 199, 9, 0.10)",
         "attenzione-tenue": "rgba(255, 167, 38, 0.10)",
         "critico-tenue": "rgba(255, 107, 107, 0.10)",
         "successo-tenue": "rgba(74, 222, 128, 0.10)",
+        "informazione-tenue": "rgba(96, 165, 250, 0.10)",
         "voce-attiva": "#FFC709",
         "voce-attiva-testo": "#1E1A12",
         "ombra": "0 1px 2px rgba(0, 0, 0, 0.4)",
