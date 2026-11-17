@@ -20,7 +20,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import tema
 from streamlit.delta_generator import DeltaGenerator
-from ui import etichetta_rischio, formatta_numero, stile_figura, stile_stato
+from ui import etichetta_rischio, formatta_numero, iniziali, stile_figura, stile_stato
 
 from beewatch.models import LivelloRischio, StatoAlveare
 from beewatch.services import MESI
@@ -373,4 +373,19 @@ def scheda_modello_report(icona: str, titolo: str, descrizione: str) -> None:
         f'<div class="bw-modello"><span class="bw-icona-tonda">{immagine_icona(icona, 20)}</span>'
         f'<span class="bw-modello-titolo">{html.escape(titolo)}</span></div>'
         f'<p class="bw-modello-testo">{html.escape(descrizione)}</p>'
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Impostazioni: il profilo
+# --------------------------------------------------------------------------- #
+
+
+def avatar_profilo(nome: str, ruolo: str) -> None:
+    """L'avatar grande con le iniziali, il nome e il ruolo («Dati profilo» del mockup)."""
+    st.html(
+        f'<div class="bw-profilo"><div class="bw-avatar bw-avatar-grande">'
+        f"{html.escape(iniziali(nome))}</div><div>"
+        f'<div class="bw-profilo-nome">{html.escape(nome)}</div>'
+        f'<div class="bw-utente-ruolo">{html.escape(ruolo)}</div></div></div>'
     )

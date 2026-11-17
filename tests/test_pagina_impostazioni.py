@@ -74,7 +74,7 @@ def test_quattro_schede_con_il_profilo_compilato(ambiente):
     at = apri()
 
     assert not at.exception and not at.error
-    assert valori(at.title) == ["⚙️ Impostazioni"]
+    assert valori(at.title) == ["Impostazioni"]
     assert [t.label for t in at.tabs] == ["Profilo", "Notifiche", "AI e Modelli", "Database"]
     assert at.text_input(key="profilo_nome").value == "Apicoltore Dimostrativo"
     assert at.text_input(key="profilo_email").value == "demo@beewatch.local"
@@ -150,7 +150,7 @@ def test_cancellare_laccount_chiede_spunta_e_password(ambiente):
 def test_le_notifiche_si_salvano(ambiente):
     at = apri()
     at.slider(key="notifiche_giorni").set_value(14)
-    at.checkbox(key="notifiche_avvisi").uncheck()
+    at.toggle(key="notifiche_avvisi").set_value(False)
 
     at = at.button(key="notifiche_invia").click().run()
 
@@ -164,7 +164,7 @@ def test_le_notifiche_si_salvano(ambiente):
 
 def test_il_consenso_allassistente_esterno_si_salva(ambiente):
     at = apri()
-    at.checkbox(key="ai_esterno").uncheck()
+    at.toggle(key="ai_esterno").set_value(False)
 
     at = at.button(key="ai_invia").click().run()
 
