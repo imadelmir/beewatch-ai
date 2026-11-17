@@ -965,3 +965,33 @@ section[data-testid="stSidebar"] {
   color: var(--bw-accento-testo);
   background: transparent;
 }
+
+/* ---------------------------------------------------------------- Impostazioni */
+
+.bw-profilo {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.25rem 0 0.75rem 0;
+}
+
+.bw-avatar-grande {
+  width: 72px;
+  height: 72px;
+  font-size: 1.5rem;
+}
+
+.bw-profilo-nome {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--bw-testo);
+}
+
+/* la zona pericolosa: la cancellazione dell'account */
+.st-key-bw_card_pericolo {
+  border-color: var(--bw-critico);
+}
+
+.st-key-bw_card_pericolo h3 {
+  color: var(--bw-critico);
+}
