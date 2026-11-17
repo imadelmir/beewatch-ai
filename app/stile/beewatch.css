@@ -995,3 +995,28 @@ section[data-testid="stSidebar"] {
 .st-key-bw_card_pericolo h3 {
   color: var(--bw-critico);
 }
+
+/* ---------------------------------------------------------------- Trasparenza */
+
+/* il titolo di ogni card è una pastiglia colorata, come nel mockup */
+[class*="st-key-bw_card_trasp_"] h3 {
+  display: block;
+  text-align: center;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.75rem;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  margin-bottom: 0.4rem;
+}
+
+[class*="st-key-bw_card_trasp_"] [data-testid="stMarkdownContainer"] p {
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.st-key-bw_card_trasp_neutro h3 { color: var(--bw-testo2); background: var(--bw-sfondo); }
+.st-key-bw_card_trasp_privacy h3 { color: var(--bw-informazione); background: var(--bw-informazione-tenue); }
+.st-key-bw_card_trasp_trasparenza h3 { color: var(--bw-successo); background: var(--bw-successo-tenue); }
+.st-key-bw_card_trasp_bias h3 { color: var(--bw-accento-testo); background: var(--bw-accento-tenue); }
+.st-key-bw_card_trasp_limiti h3 { color: var(--bw-critico); background: var(--bw-critico-tenue); }
+.st-key-bw_card_trasp_regole h3 { color: var(--bw-informazione); background: var(--bw-informazione-tenue); }

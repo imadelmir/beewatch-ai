@@ -113,7 +113,7 @@ def test_lavvertenza_sul_veterinario_e_in_cima(app_pronta, monkeypatch):
     at = apri()
 
     assert not at.exception and not at.error
-    assert valori(at.title) == ["🔍 Trasparenza"]
+    assert valori(at.title) == ["Trasparenza e limiti"]
     prima = at.warning[0]
     assert prima.value.startswith("BeeWatch AI non è uno strumento diagnostico.")
     assert not at.expander  # niente di nascosto

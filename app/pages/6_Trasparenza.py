@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import streamlit as st
 from avvio import avvia, modello
-from ui import formatta_numero, intestazione, metrica, mostra_errore, sidebar
+from schede import testata
+from ui import formatta_numero, metrica, mostra_errore, sidebar
 
 from beewatch.exceptions import BeeWatchError
 
@@ -116,65 +117,86 @@ AVVERTENZA_VETERINARIO = SEZIONI[4][1][0]
 # Pagina
 # --------------------------------------------------------------------------- #
 
+# Le card del mockup: il colore della pastiglia del titolo e il riferimento in fondo.
+TONI = ("neutro", "privacy", "trasparenza", "bias", "limiti", "regole")
+RIFERIMENTI = (
+    "docs/etica.md · che cosa fa",
+    "GDPR art. 5, 6, 17 · docs/etica.md · Privacy",
+    "AI Act art. 50 · avviso sempre visibile",
+    "docs/model_card.md · limiti dichiarati",
+    "docs/etica.md · non è uno strumento diagnostico",
+    "Reg. (UE) 2016/679 e 2024/1689",
+)
+
 servizi = avvia("Trasparenza", "🔍")
 sidebar()
 
-intestazione(
-    "🔍 Trasparenza",
-    "Quali dati usa l'applicazione, chi scrive i riepiloghi e dove le stime possono sbagliare.",
+testata(
+    "Trasparenza e limiti",
+    "Cosa fa questo sistema, con quali dati, e cosa non è in grado di fare.",
 )
 
 # La frase più importante sta in cima, dove non si può non vederla.
 st.warning(AVVERTENZA_VETERINARIO, icon="⚠️")
 
+# Le sei sezioni del documento etico, in card, tre per riga come nel mockup.
+for riga in range(0, len(SEZIONI), 3):
+    for colonna, indice in zip(st.columns(3), range(riga, riga + 3), strict=False):
+        titolo, paragrafi = SEZIONI[indice]
+        with colonna, st.container(key=f"bw_card_trasp_{TONI[indice]}"):
+            st.subheader(titolo)
+            for paragrafo in paragrafi:
+                st.markdown(paragrafo)
+            st.caption(RIFERIMENTI[indice])
+
+sinistra, destra = st.columns(2)
+
 # Questa installazione: l'assistente è locale o esterno?
-info = servizi.info_assistente()
-st.subheader("L'assistente di questa installazione")
-if info.in_locale is True:
-    st.success(
-        f"L'assistente usa **{info.descrizione}**, che gira su questo computer: le note delle "
-        "ispezioni non escono dal PC.",
-        icon="🏠",
-    )
-elif info.in_locale is False:
-    st.warning(
-        f"L'assistente usa **{info.descrizione}**, un servizio esterno: quando chiedi un "
-        "riepilogo, le note di quell'ispezione escono dal PC e vengono inviate a quel servizio.",
-        icon="🌐",
-    )
-else:
-    st.info(
-        "L'assistente non è configurato in questa installazione: nessuna nota viene inviata a un "
-        "modello di linguaggio.",
-        icon="ℹ️",
-    )
+with sinistra, st.container(key="bw_card_installazione"):
+    info = servizi.info_assistente()
+    st.subheader("L'assistente di questa installazione")
+    if info.in_locale is True:
+        st.success(
+            f"L'assistente usa **{info.descrizione}**, che gira su questo computer: le note "
+            "delle ispezioni non escono dal PC.",
+            icon="🏠",
+        )
+    elif info.in_locale is False:
+        st.warning(
+            f"L'assistente usa **{info.descrizione}**, un servizio esterno: quando chiedi un "
+            "riepilogo, le note di quell'ispezione escono dal PC e vengono inviate a quel "
+            "servizio.",
+            icon="🌐",
+        )
+    else:
+        st.info(
+            "L'assistente non è configurato in questa installazione: nessuna nota viene inviata "
+            "a un modello di linguaggio.",
+            icon="ℹ️",
+        )
 
 # Il modello di previsione, con i suoi numeri letti dal file dei metadati.
-st.subheader("Il modello di previsione in uso")
-try:
-    stato = modello()
-except BeeWatchError as errore:
-    mostra_errore(errore)
-else:
-    colonne = st.columns(4)
-    with colonne[0]:
-        metrica(
-            "Errore medio",
-            stato.mae_kg,
-            "kg",
-            aiuto="Di quanti chili per colonia sbaglia in media, su anni che non aveva visto.",
+with destra, st.container(key="bw_card_modello_in_uso"):
+    st.subheader("Il modello di previsione in uso")
+    try:
+        stato = modello()
+    except BeeWatchError as errore:
+        mostra_errore(errore)
+    else:
+        colonne = st.columns(2)
+        with colonne[0]:
+            metrica(
+                "Errore medio",
+                stato.mae_kg,
+                "kg",
+                aiuto="Di quanti chili per colonia sbaglia in media, su anni che non aveva visto.",
+            )
+        with colonne[1]:
+            metrica("Righe di addestramento", stato.righe_addestramento, None)
+        st.caption(
+            f"Modello {stato.versione} ({stato.algoritmo}): in media sbaglia di "
+            f"{formatta_numero(stato.mae_kg)} kg per colonia sul 2010–2012."
         )
-    with colonne[1]:
-        metrica("Righe di addestramento", stato.righe_addestramento, None)
-    st.caption(
-        f"Modello {stato.versione} ({stato.algoritmo}): in media sbaglia di "
-        f"{formatta_numero(stato.mae_kg)} kg per colonia sul 2010–2012."
-    )
-
-for titolo, paragrafi in SEZIONI:
-    st.subheader(titolo)
-    for paragrafo in paragrafi:
-        st.markdown(paragrafo)
 
 st.caption(
     "Questa pagina riprende, parola per parola, il documento etico del progetto "
